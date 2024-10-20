@@ -18,13 +18,26 @@ async function handleMessage(event, pageAccessToken) {
   const args = messageText.split(' ');
   const commandName = args.shift();
 
-  if (commands.has(commandName)) {
+  // Si le message ne contient aucune commande, faire appel à GPT-4o par défaut
+  if (!commands.has(commandName)) {
+    // Utiliser GPT-4o sans la commande
+    const gpt4oCommand = commands.get('gpt4o');
+    if (gpt4oCommand) {
+      try {
+        await gpt4oCommand.execute(senderId, messageText.split(' '), pageAccessToken, sendMessage);
+      } catch (error) {
+        console.error(`Error executing GPT-4o command:`, error);
+        sendMessage(senderId, { text: 'Désolé, une erreur est survenue lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
+      }
+    }
+  } else {
+    // Si une commande spécifique est utilisée, continuer à l'utiliser
     const command = commands.get(commandName);
     try {
       await command.execute(senderId, args, pageAccessToken, sendMessage);
     } catch (error) {
       console.error(`Error executing command ${commandName}:`, error);
-      sendMessage(senderId, { text: 'There was an error executing that command.' }, pageAccessToken);
+      sendMessage(senderId, { text: 'Il y a eu une erreur lors de l\'exécution de cette commande.' }, pageAccessToken);
     }
   }
 }
