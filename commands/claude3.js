@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'aiChat',
+  name: 'claude',
   description: 'Interagir avec l\'IA (GPT-4o)',
   author: 'Votre Nom',
   async execute(senderId, args, pageAccessToken, sendMessage) {
