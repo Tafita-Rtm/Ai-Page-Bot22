@@ -2,75 +2,65 @@ const axios = require('axios');
 const path = require('path');
 
 module.exports = {
-  name: 'claude3',
-  description: 'Pose une question à GPT-4o websrapers(afaka mamaly ny zavatra mitranga ankehitriny).',
+  name: 'gpt4o',
+  description: 'Analyse une image avec GPT-4o ou pose une question',
   author: 'Deku (rest api)',
+  
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
-
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
-    }
-
     try {
-      // Envoyer un message indiquant que GPT-4 est en train de répondre
-      await sendMessage(senderId, { text: 'GPT-4o websearche en cours⏳...\n\n─────★─────' }, pageAccessToken);
+      // Si le message contient une référence à une image (par exemple réponse à une image)
+      if (args[0] && args[0].startsWith('http')) {
+        const imageUrl = args[0]; // L'URL de l'image est passée comme premier argument
+        const query = args.slice(1).join(' ') || "Décris cette image."; // Le reste des arguments est la question
+        await sendMessage(senderId, { text: '🔍 Analyse de l\'image en cours... ⏳' }, pageAccessToken);
+        
+        const geminiUrl = `https://deku-rest-api.gleeze.com/gemini?prompt=${encodeURIComponent(query)}&url=${encodeURIComponent(imageUrl)}`;
+        const { data } = await axios.get(geminiUrl);
 
-      // Si le message auquel on répond contient une image
-      if (args.length === 0) {
-        const repliedMessage = await fetchRepliedMessage(senderId, pageAccessToken); // Fonction simulée pour obtenir le message répondu
-        if (repliedMessage && repliedMessage.attachments && repliedMessage.attachments[0].type === 'image') {
-          const imageUrl = repliedMessage.attachments[0].url;
-          const query = "Décris cette image.";
-          await handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken);
-          return;
-        }
-      }
-
-      // URL pour appeler l'API GPT-4o avec une question
-      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
-      const response = await axios.get(apiUrl);
-
-      const text = response.data.result;
-
-      // Créer un style avec un contour pour la réponse de GPT-4
-      const formattedResponse = `─────★─────\n` +
-                                `✨GPT-4o web scrapers🤖🇲🇬\n\n${text}\n` +
-                                `─────★─────`;
-
-      // Gérer les réponses longues de plus de 2000 caractères
-      const maxMessageLength = 2000;
-      if (formattedResponse.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
-        for (const message of messages) {
-          await sendMessage(senderId, { text: message }, pageAccessToken);
-        }
-      } else {
+        // Formatage de la réponse de GPT-4o
+        const formattedResponse = formatResponse(data.gemini);
         await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-      }
+      } else {
+        const prompt = args.join(' ');
+        
+        if (!prompt) {
+          return sendMessage(senderId, { text: "Veuillez entrer une question valide ou une URL d'image." }, pageAccessToken);
+        }
 
+        // Envoyer un message indiquant que GPT-4o est en train de répondre à la question
+        await sendMessage(senderId, { text: '💬 *GPT-4o est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+        
+        const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
+        const response = await axios.get(apiUrl);
+        const text = response.data.result;
+
+        // Créer un style avec un contour pour la réponse de GPT-4o
+        const formattedResponse = `─────★─────\n` +
+                                  `✨GPT-4o mini🤖🇲🇬\n\n${text}\n` +
+                                  `─────★─────`;
+
+        // Gérer les réponses longues de plus de 2000 caractères
+        const maxMessageLength = 2000;
+        if (formattedResponse.length > maxMessageLength) {
+          const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+          for (const message of messages) {
+            await sendMessage(senderId, { text: message }, pageAccessToken);
+          }
+        } else {
+          await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+        }
+      }
     } catch (error) {
-      console.error('Error calling GPT-4 API:', error);
+      console.error('Erreur lors de l\'appel à l\'API GPT-4o:', error);
       // Message de réponse d'erreur
       await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
 };
 
-// Fonction pour gérer les images
-async function handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken) {
-  try {
-    const apiUrl = `https://deku-rest-apis.ooguy.com/gemini?prompt=${encodeURIComponent(query)}&url=${encodeURIComponent(imageUrl)}`;
-    const { data } = await axios.get(apiUrl);
-    const formattedResponse = `─────★─────\n` +
-                              `✨GPT-4o🤖🇲🇬\n\n${data.gemini}\n` +
-                              `─────★─────`;
-
-    await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-  } catch (error) {
-    console.error('Error handling image:', error);
-    await sendMessage(senderId, { text: "Désolé, je n'ai pas pu analyser l'image." }, pageAccessToken);
-  }
+// Fonction pour formater la réponse
+function formatResponse(response) {
+  return response.replace(/\*\*(.*?)\*\*/g, (match, p1) => global.convertToGothic(p1));
 }
 
 // Fonction pour découper les messages en morceaux de 2000 caractères
