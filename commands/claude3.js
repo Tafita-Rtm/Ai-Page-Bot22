@@ -2,7 +2,7 @@ const axios = require('axios');
 const path = require('path');
 
 module.exports = {
-  name: '4o',
+  name: 'claude3',
   description: 'Pose une question à GPT-4o websrapers(afaka mamaly ny zavatra mitranga ankehitriny).',
   author: 'Deku (rest api)',
   async execute(senderId, args, pageAccessToken, sendMessage) {
