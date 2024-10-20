@@ -4,12 +4,15 @@ const { sendMessage } = require('./sendMessage');
 
 const commands = new Map();
 
-// Load all command modules dynamically
+// Charger tous les modules de commande dynamiquement
 const commandFiles = fs.readdirSync(path.join(__dirname, '../commands')).filter(file => file.endsWith('.js'));
 for (const file of commandFiles) {
   const command = require(`../commands/${file}`);
   commands.set(command.name, command);
 }
+
+// Variable pour stocker le choix de l'IA (GPT-4o ou Gemini)
+let iaChoice = null;
 
 async function handleMessage(event, pageAccessToken) {
   const senderId = event.sender.id;
@@ -18,16 +21,34 @@ async function handleMessage(event, pageAccessToken) {
   const args = messageText.split(' ');
   const commandName = args.shift();
 
-  // Si le message ne contient aucune commande, faire appel à GPT-4o par défaut
+  // Si l'utilisateur demande de stopper l'automatisation
+  if (messageText === 'stop') {
+    iaChoice = null;
+    sendMessage(senderId, { text: 'L\'automatisation de l\'IA a été arrêtée.' }, pageAccessToken);
+    return;
+  }
+
+  // Si l'IA n'a pas encore été choisie
+  if (!iaChoice) {
+    sendMessage(senderId, {
+      text: 'Choisissez une IA :',
+      buttons: [
+        { type: 'postback', title: 'Gemini', payload: 'gemini' },
+        { type: 'postback', title: 'GPT-4o', payload: 'gpt4o' }
+      ]
+    }, pageAccessToken);
+    return;
+  }
+
+  // Si le message ne contient aucune commande spécifique, exécuter l'IA choisie
   if (!commands.has(commandName)) {
-    // Utiliser GPT-4o sans la commande
-    const gpt4oCommand = commands.get('gpt4o');
-    if (gpt4oCommand) {
+    const selectedCommand = commands.get(iaChoice); // Utiliser l'IA sélectionnée
+    if (selectedCommand) {
       try {
-        await gpt4oCommand.execute(senderId, messageText.split(' '), pageAccessToken, sendMessage);
+        await selectedCommand.execute(senderId, messageText.split(' '), pageAccessToken, sendMessage);
       } catch (error) {
-        console.error(`Error executing GPT-4o command:`, error);
-        sendMessage(senderId, { text: 'Désolé, une erreur est survenue lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
+        console.error(`Erreur lors de l'exécution de la commande ${iaChoice}:`, error);
+        sendMessage(senderId, { text: `Désolé, une erreur est survenue avec ${iaChoice}.` }, pageAccessToken);
       }
     }
   } else {
@@ -36,10 +57,21 @@ async function handleMessage(event, pageAccessToken) {
     try {
       await command.execute(senderId, args, pageAccessToken, sendMessage);
     } catch (error) {
-      console.error(`Error executing command ${commandName}:`, error);
+      console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
       sendMessage(senderId, { text: 'Il y a eu une erreur lors de l\'exécution de cette commande.' }, pageAccessToken);
     }
   }
 }
 
-module.exports = { handleMessage };
+// Gestion du choix d'IA lors du clic sur les boutons flottants
+async function handlePostback(event, pageAccessToken) {
+  const senderId = event.sender.id;
+  const payload = event.postback.payload;
+
+  if (payload === 'gemini' || payload === 'gpt4o') {
+    iaChoice = payload; // Enregistrer l'IA choisie
+    sendMessage(senderId, { text: `Vous avez choisi ${payload}.` }, pageAccessToken);
+  }
+}
+
+module.exports = { handleMessage, handlePostback };
