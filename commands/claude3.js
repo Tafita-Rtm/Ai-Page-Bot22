@@ -1,4 +1,15 @@
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+
+// Fonction pour s'assurer que le répertoire "temp" existe
+function ensureTempDirectory() {
+    const tempDir = path.resolve(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir);
+    }
+    return tempDir;
+}
 
 module.exports = {
     name: 'pinterest',
@@ -25,18 +36,35 @@ module.exports = {
                 return sendMessage(senderId, { text: "Aucune image trouvée pour votre requête." }, pageAccessToken);
             }
 
-            // Préparer le message formaté avec les images
+            // Créer un message pour indiquer que les images sont en cours d'envoi
             const formattedResponse = `─────★─────\n` +
                                       `✨Images Pinterest pour : "${query}"\n\n` +
                                       `─────★─────`;
-
             await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
 
-            // Envoi des images une par une
+            // Assurer que le répertoire temp existe
+            const tempDir = ensureTempDirectory();
+
+            // Télécharger et envoyer chaque image
             for (const imageUrl of images) {
+                const imagePath = path.join(tempDir, `${Date.now()}.jpg`);
+                const writer = fs.createWriteStream(imagePath);
+
+                const imageResponse = await axios.get(imageUrl, { responseType: 'stream' });
+                imageResponse.data.pipe(writer);
+
+                await new Promise((resolve, reject) => {
+                    writer.on('finish', resolve);
+                    writer.on('error', reject);
+                });
+
+                // Envoyer l'image téléchargée
                 await sendMessage(senderId, {
-                    attachment: { type: 'image', payload: { url: imageUrl } }
+                    attachment: fs.createReadStream(imagePath)
                 }, pageAccessToken);
+
+                // Supprimer le fichier temporaire après envoi
+                fs.unlinkSync(imagePath);
             }
 
         } catch (error) {
