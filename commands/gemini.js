@@ -1,32 +1,45 @@
 const { callGeminiAPI } = require('../utils/callGeminiAPI');
 
 module.exports = {
-  name: 'gemini',
-  description: 'Ask a question to the Gemini AI',
+  name: 'g',
+  description: '📩 Utiliser Gemini',
   author: 'ChatGPT',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
+
     try {
-      sendMessage(senderId, { text: 'Please wait, I am processing your request...' }, pageAccessToken);
+      // Message pour indiquer que Gemini est en train de répondre
+      const waitingMessage = {
+        text: '💬 *Gemini est en train de te répondre* ⏳...\n\n─────★─────'
+      };
+      await sendMessage(senderId, waitingMessage, pageAccessToken);
+
+      // Appel à l'API Gemini
       const response = await callGeminiAPI(prompt);
 
-      // Split the response into chunks if it exceeds 2000 characters
+      // Créer un style avec un contour pour la réponse de Gemini
+      const formattedResponse = `─────★─────\n` +
+                                `✨ Gemini 🤖🇲🇬\n\n${response}\n` +
+                                `─────★─────`;
+
+      // Gérer les réponses de plus de 2000 caractères
       const maxMessageLength = 2000;
-      if (response.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(response, maxMessageLength);
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
         for (const message of messages) {
-          sendMessage(senderId, { text: message }, pageAccessToken);
+          await sendMessage(senderId, { text: message }, pageAccessToken);
         }
       } else {
-        sendMessage(senderId, { text: response }, pageAccessToken);
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
       }
     } catch (error) {
       console.error('Error calling Gemini API:', error);
-      sendMessage(senderId, { text: 'Sorry, there was an error processing your request.' }, pageAccessToken);
+      await sendMessage(senderId, { text: 'Une erreur est survenue.' }, pageAccessToken);
     }
   }
 };
 
+// Fonction pour découper les messages en morceaux de 2000 caractères
 function splitMessageIntoChunks(message, chunkSize) {
   const chunks = [];
   for (let i = 0; i < message.length; i += chunkSize) {
