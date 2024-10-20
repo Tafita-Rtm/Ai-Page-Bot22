@@ -1,74 +1,60 @@
 const axios = require('axios');
 
-// Fonction pour appeler l'API GPT-convo
-async function gptConvoAPI(ask, id) {
-    try {
-        const response = await axios.get(`https://jonellccprojectapis10.adaptable.app/api/gptconvo?ask=${encodeURIComponent(ask)}&id=${id}`);
-        if (response.data && response.data.response) {
-            return response.data.response;
-        } else {
-            return "Unexpected API response format. Please check the API or contact support.";
-        }
-    } catch (error) {
-        console.error("Error fetching data:", error.message);
-        return "Failed to fetch data. Please try again later.";
-    }
-}
-
 module.exports = {
-    name: 'ai3',
-    description: 'Interact with GPT-3 conversational AI and image recognition',
-    author: 'Deku (rest api)',
-    async execute(senderId, args, pageAccessToken, sendMessage) {
-        const message = args.join(' ');
+  name: 'aiChat',
+  description: 'Interagir avec l\'IA (GPT-4o)',
+  author: 'Votre Nom',
+  async execute(senderId, args, pageAccessToken, sendMessage) {
+    const prompt = args.join(' ');
 
-        if (!message) {
-            return sendMessage(senderId, {
-                text: "Please provide your question.\n\nExample: ai What is the solar system?"
-            }, pageAccessToken);
-        }
-
-        try {
-            // Envoi d'un message indiquant que la recherche est en cours
-            await sendMessage(senderId, {
-                text: "🔎 Searching for an answer. Please wait..."
-            }, pageAccessToken);
-
-            // Gestion de la reconnaissance d'image si un fichier est joint au message
-            if (event.type === "message_reply" && event.messageReply.attachments && event.messageReply.attachments[0]) {
-                const attachment = event.messageReply.attachments[0];
-                if (attachment.type === "photo") {
-                    const imageURL = attachment.url;
-                    const geminiUrl = `https://joncll.serv00.net/chat.php?ask=${encodeURIComponent(message)}&imgurl=${encodeURIComponent(imageURL)}`;
-                    const geminiResponse = await axios.get(geminiUrl);
-                    const { vision } = geminiResponse.data;
-
-                    if (vision) {
-                        return sendMessage(senderId, {
-                            text: `𝗚𝗲𝗺𝗶𝗻𝗶 𝗩𝗶𝘀𝗶𝗼𝗻 𝗜𝗺𝗮𝗴𝗲 𝗥𝗲𝗰𝗼𝗴𝗻𝗶𝘁𝗶𝗼𝗻\n━━━━━━━━━━━━━━━━━━\n${vision}\n━━━━━━━━━━━━━━━━━━`
-                        }, pageAccessToken);
-                    } else {
-                        return sendMessage(senderId, {
-                            text: "🤖 Failed to recognize the image."
-                        }, pageAccessToken);
-                    }
-                }
-            }
-
-            // Appel à l'API GPT-convo pour obtenir une réponse textuelle
-            const response = await gptConvoAPI(message, senderId);
-            const formattedResponse = `𝗖𝗛𝗔𝗧𝗚𝗣𝗧\n━━━━━━━━━━━━━━━━━━\n${response}\n━━━━━━━━━━━━━━━━━━`;
-
-            // Envoi de la réponse formatée à l'utilisateur
-            await sendMessage(senderId, {
-                text: formattedResponse
-            }, pageAccessToken);
-
-        } catch (error) {
-            console.error('Error during API request:', error);
-            await sendMessage(senderId, {
-                text: "An error occurred while processing your request. Please try again later."
-            }, pageAccessToken);
-        }
+    if (!prompt) {
+      return sendMessage(senderId, { text: "Veuillez entrer un message valide." }, pageAccessToken);
     }
+
+    try {
+      // Envoyer un message indiquant que l'IA est en train de répondre
+      await sendMessage(senderId, { text: '💬 *L\'IA est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+
+      // URL pour appeler l'API GPT-4o
+      const apiUrl = `https://free-ai-models.vercel.app/v1/chat/completions`;
+      const response = await axios.post(apiUrl, {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'user', content: prompt }
+        ]
+      });
+
+      const text = response.data.response;
+
+      // Créer un style avec un contour pour la réponse de l'IA
+      const formattedResponse = `─────★─────\n` +
+                                `✨ Réponse de l'IA 🤖\n\n${text}\n` +
+                                `─────★─────`;
+
+      // Gérer les réponses longues de plus de 2000 caractères
+      const maxMessageLength = 2000;
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+        for (const message of messages) {
+          await sendMessage(senderId, { text: message }, pageAccessToken);
+        }
+      } else {
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      }
+
+    } catch (error) {
+      console.error('Error calling AI API:', error);
+      // Message de réponse d'erreur
+      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
+    }
+  }
 };
+
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
