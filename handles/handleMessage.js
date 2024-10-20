@@ -19,7 +19,7 @@ async function handleMessage(event, pageAccessToken) {
   // Vérifier si le message contient une image
   if (event.message.attachments && event.message.attachments[0].type === 'image') {
     const imageUrl = event.message.attachments[0].payload.url;
-    console.log(`Image received: ${imageUrl}`);
+    console.log(`Image reçue: ${imageUrl}`);
 
     // Appel à la commande Gemini pour traiter l'image
     const geminiCommand = commands.get('gemini');
@@ -34,7 +34,23 @@ async function handleMessage(event, pageAccessToken) {
     }
   } else if (event.message.text) {
     const messageText = event.message.text.toLowerCase();
+
+    // Vérifier s'il s'agit d'une commande spécifique (ex : help)
+    const args = messageText.split(' ');
+    const commandName = args.shift();
     
+    if (commands.has(commandName)) {
+      const command = commands.get(commandName);
+      try {
+        await command.execute(senderId, args, pageAccessToken, sendMessage);
+        return;  // Arrêter ici si une commande spécifique est exécutée
+      } catch (error) {
+        console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
+        sendMessage(senderId, { text: 'Il y a eu une erreur lors de l\'exécution de cette commande.' }, pageAccessToken);
+        return;
+      }
+    }
+
     // Si l'utilisateur tape "stop", on arrête et on demande à nouveau quel service utiliser
     if (messageText === 'stop') {
       delete userChoice[senderId];  // Réinitialiser le choix de l'utilisateur
@@ -46,9 +62,9 @@ async function handleMessage(event, pageAccessToken) {
       return sendMessage(senderId, { text: "Voulez-vous utiliser 'gpt4o' ou 'gemini' pour cette question ?" }, pageAccessToken);
     }
 
-    // Si l'utilisateur a déjà fait un choix (gpt4o ou gemini)
+    // Utiliser GPT-4o ou Gemini selon le choix précédent de l'utilisateur
     const service = userChoice[senderId];
-
+    
     if (service === 'gpt4o') {
       const gpt4oCommand = commands.get('gpt4o');
       if (gpt4oCommand) {
@@ -63,7 +79,7 @@ async function handleMessage(event, pageAccessToken) {
       const geminiCommand = commands.get('gemini');
       if (geminiCommand) {
         try {
-          const query = messageText; // L'utilisateur peut poser des questions à Gemini
+          const query = messageText;  // L'utilisateur peut poser des questions à Gemini
           await geminiCommand.execute(senderId, [query], pageAccessToken, sendMessage);
         } catch (error) {
           console.error('Erreur lors de l\'utilisation de Gemini:', error);
@@ -74,19 +90,15 @@ async function handleMessage(event, pageAccessToken) {
   }
 }
 
-// Attendre la réponse de l'utilisateur pour choisir entre GPT-4o ou Gemini
-async function waitForUserResponse(senderId, pageAccessToken) {
-  return new Promise((resolve) => {
-    const interval = setInterval(async () => {
-      // On suppose qu'une autre fonction écoute les messages
-      const message = await checkForNewMessage(senderId);  // Fonction simulée pour vérifier si l'utilisateur a répondu
-      if (message === 'gpt4o' || message === 'gemini') {
-        userChoice[senderId] = message;  // Stocker le choix de l'utilisateur
-        clearInterval(interval);  // Arrêter l'intervalle une fois la réponse reçue
-        resolve(message);
-      }
-    }, 1000);  // Vérification toutes les secondes
-  });
+// Gestion du choix de l'utilisateur entre GPT-4o ou Gemini
+async function chooseService(senderId, pageAccessToken, messageText) {
+  const service = messageText.toLowerCase();
+  if (service === 'gpt4o' || service === 'gemini') {
+    userChoice[senderId] = service;  // Stocker le choix de l'utilisateur
+    sendMessage(senderId, { text: `Vous avez choisi d'utiliser ${service.toUpperCase()}.` }, pageAccessToken);
+  } else {
+    sendMessage(senderId, { text: "Choix invalide. Veuillez taper 'gpt4o' ou 'gemini'." }, pageAccessToken);
+  }
 }
 
 module.exports = { handleMessage };
