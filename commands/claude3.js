@@ -2,7 +2,7 @@ const axios = require('axios');
 const path = require('path');
 
 module.exports = {
-  name: 'gpt4o',
+  name: 'claude',
   description: 'Analyse une image avec GPT-4o ou pose une question',
   author: 'Deku (rest api)',
   
