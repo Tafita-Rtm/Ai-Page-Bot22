@@ -1,74 +1,56 @@
 const axios = require("axios");
-const fs = require('fs-extra');
-const { getStreamFromURL, shortenURL, randomString } = global.utils;
 
 module.exports = {
-    name: "spotify",
-    description: "Jouer une chanson à partir de Spotify",
-    version: "1.0.0",
-    role: 0,
-    cooldowns: 10,
-    async execute(api, event, args) {
-        const { threadID, messageID } = event;
-        api.setMessageReaction("🕢", messageID, (err) => {}, true);
+  name: "ai2",
+  description: "Pose une question à GPT-4o",
+  async execute(senderId, args, pageAccessToken, sendMessage) {
+    const prompt = args.join(" ");
+    const api_josh = "https://deku-rest-apis.ooguy.com"; // API URL
 
-        let songName = '';
-
-        const fetchSongFromAttachment = async () => {
-            const attachment = event.messageReply.attachments[0];
-            if (attachment.type === "audio" || attachment.type === "video") {
-                const shortenedUrl = await shortenURL(attachment.url);
-                const response = await axios.get(`https://audio-recon-ahcw.onrender.com/kshitiz?url=${encodeURIComponent(shortenedUrl)}`);
-                return response.data.title;
-            } else {
-                throw new Error("Type de pièce jointe non valide.");
-            }
-        };
-
-        try {
-            if (event.messageReply && event.messageReply.attachments && event.messageReply.attachments.length > 0) {
-                songName = await fetchSongFromAttachment();
-            } else if (args.length === 0) {
-                return api.sendMessage("Veuillez fournir un nom de chanson.", threadID, messageID);
-            } else {
-                songName = args.join(" ");
-            }
-
-            const searchResponse = await axios.get(`https://spotify-play-iota.vercel.app/spotify?query=${encodeURIComponent(songName)}`);
-            const trackURLs = searchResponse.data.trackURLs;
-
-            if (!trackURLs || trackURLs.length === 0) {
-                return api.sendMessage("Aucune piste trouvée pour le nom de chanson fourni.", threadID, messageID);
-            }
-
-            const trackID = trackURLs[0];
-            const downloadResponse = await axios.get(`https://sp-dl-bice.vercel.app/spotify?id=${encodeURIComponent(trackID)}`);
-            const downloadLink = downloadResponse.data.download_link;
-
-            const localFilePath = await downloadTrack(downloadLink);
-
-            await api.sendMessage({
-                body: `🎧 Lecture : ${songName}`,
-                attachment: fs.createReadStream(localFilePath)
-            }, threadID, messageID);
-
-            console.log("Audio envoyé avec succès.");
-
-        } catch (error) {
-            console.error("Erreur survenue :", error);
-            await api.sendMessage(`Une erreur est survenue : ${error.message}`, threadID, messageID);
-        }
+    if (!prompt) {
+      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
     }
+
+    // Envoyer un message indiquant que GPT-4 est en train de répondre
+    await sendMessage(senderId, { text: "💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────" }, pageAccessToken);
+
+    try {
+      // Appel à l'API GPT-4o
+      const response = await axios.get(`${api_josh}/api/gpt-4o`, {
+        params: {
+          q: prompt,
+          uid: senderId,
+        },
+      });
+
+      const text = response.data.result;
+
+      // Créer un style avec un contour pour la réponse de GPT-4
+      const formattedResponse = `─────★─────\n✨GPT-4o mini🤖🇲🇬\n\n${text}\n─────★─────`;
+
+      // Gérer les réponses longues de plus de 2000 caractères
+      const maxMessageLength = 2000;
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+        for (const message of messages) {
+          await sendMessage(senderId, { text: message }, pageAccessToken);
+        }
+      } else {
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      }
+    } catch (error) {
+      console.error("Error calling GPT-4 API:", error);
+      // Message de réponse d'erreur
+      await sendMessage(senderId, { text: "Désolé, une erreur est survenue. Veuillez réessayer plus tard." }, pageAccessToken);
+    }
+  },
 };
 
-async function downloadTrack(url) {
-    const stream = await getStreamFromURL(url);
-    const filePath = `${__dirname}/tmp/${randomString()}.mp3`;
-    const writeStream = fs.createWriteStream(filePath);
-    stream.pipe(writeStream);
-
-    return new Promise((resolve, reject) => {
-        writeStream.on('finish', () => resolve(filePath));
-        writeStream.on('error', reject);
-    });
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
+  }
+  return chunks;
 }
