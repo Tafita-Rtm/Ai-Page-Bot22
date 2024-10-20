@@ -35,36 +35,20 @@ async function handleMessage(event, pageAccessToken) {
   } else if (event.message.text) {
     const messageText = event.message.text.toLowerCase();
 
-    // Vérifier s'il s'agit d'une commande spécifique (ex : help)
-    const args = messageText.split(' ');
-    const commandName = args.shift();
-    
-    if (commands.has(commandName)) {
-      const command = commands.get(commandName);
-      try {
-        await command.execute(senderId, args, pageAccessToken, sendMessage);
-        return;  // Arrêter ici si une commande spécifique est exécutée
-      } catch (error) {
-        console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
-        sendMessage(senderId, { text: 'Il y a eu une erreur lors de l\'exécution de cette commande.' }, pageAccessToken);
-        return;
-      }
-    }
-
     // Si l'utilisateur tape "stop", on arrête et on demande à nouveau quel service utiliser
     if (messageText === 'stop') {
       delete userChoice[senderId];  // Réinitialiser le choix de l'utilisateur
       return sendMessage(senderId, { text: "Choisissez entre 'gpt4o' ou 'gemini' pour traiter votre prochaine question." }, pageAccessToken);
     }
 
-    // Si l'utilisateur n'a pas encore fait de choix, on lui demande
+    // Vérifier si l'utilisateur a déjà fait un choix
     if (!userChoice[senderId]) {
       return sendMessage(senderId, { text: "Voulez-vous utiliser 'gpt4o' ou 'gemini' pour cette question ?" }, pageAccessToken);
     }
 
     // Utiliser GPT-4o ou Gemini selon le choix précédent de l'utilisateur
     const service = userChoice[senderId];
-    
+
     if (service === 'gpt4o') {
       const gpt4oCommand = commands.get('gpt4o');
       if (gpt4oCommand) {
@@ -87,6 +71,8 @@ async function handleMessage(event, pageAccessToken) {
         }
       }
     }
+  } else {
+    sendMessage(senderId, { text: 'Désolé, je ne peux répondre qu\'à des messages texte ou à des images.' }, pageAccessToken);
   }
 }
 
