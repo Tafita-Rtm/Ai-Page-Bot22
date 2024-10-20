@@ -19,7 +19,7 @@ module.exports = {
       const fastestAnswer = await getFastestValidAnswer(query, senderId);
 
       // Envoyer la réponse formatée
-      const formattedResponse = `🧋✨ | 𝙼𝚘𝚌𝚑𝚊 𝙰𝚒\n━━━━━━━━━━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
+      const formattedResponse = `🇲🇬 | rtm ai\n━━━━━━━━━━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
       await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
 
       // Supprimer le message d'attente
@@ -28,7 +28,7 @@ module.exports = {
     } catch (error) {
       console.error('Erreur lors de la requête à l\'IA :', error);
       // Message de réponse en cas d'erreur
-      await sendMessage(senderId, { text: "Désolé, une erreur est survenue. Veuillez réessayer plus tard." }, pageAccessToken);
+      await sendMessage(senderId, { text: "." }, pageAccessToken);
     }
   }
 };
