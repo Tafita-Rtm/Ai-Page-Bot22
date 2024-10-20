@@ -16,7 +16,7 @@ module.exports = {
       await sendMessage(senderId, { text: '💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
 
       // URL pour appeler l'API GPT-4
-      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
+      const apiUrl = `https://deku-rest-apis.ooguy.com/gpt4?prompt=${encodeURIComponent(prompt)}&uid=100${senderId}`;
       const response = await axios.get(apiUrl);
 
       const text = response.data.result;
