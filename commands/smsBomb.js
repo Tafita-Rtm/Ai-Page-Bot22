@@ -1,30 +1,76 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'smsbomb',
-  description: 'Send multiple SMS messages to a number with a delay',
-  author: 'Deku (rest api)',
+  name: 'ai',
+  description: 'Pose une question à plusieurs services AI et obtient la réponse la plus rapide.',
+  author: 'ArYAN',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const [number, amount, delay] = args;
+    const query = args.join(' ');
 
-    if (!number || !amount || !delay) {
-      sendMessage(senderId, { text: 'Usage: smsbomb [number] [amount] [delay]' }, pageAccessToken);
-      return;
+    if (!query) {
+      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
     }
 
     try {
-      const apiUrl = `https://deku-rest-api-3ijr.onrender.com/smsb?number=${number}&amount=${amount}&delay=${delay}`;
-      const response = await axios.get(apiUrl);
-      
-      const { status, success, fail } = response.data;
-      if (status) {
-        sendMessage(senderId, { text: `Successfully sent ${success} SMS messages to ${number}. ${fail} messages failed.` }, pageAccessToken);
-      } else {
-        sendMessage(senderId, { text: 'Failed to send SMS messages.' }, pageAccessToken);
-      }
+      // Envoyer un message indiquant que l'IA réfléchit
+      const thinkingMessage = await sendMessage(senderId, { text: 'IA réfléchit... 🤔' }, pageAccessToken);
+
+      // Appel de la fonction pour obtenir la réponse la plus rapide parmi les services
+      const fastestAnswer = await getFastestValidAnswer(query, senderId);
+
+      // Envoyer la réponse formatée
+      const formattedResponse = `🧋✨ | 𝙼𝚘𝚌𝚑𝚊 𝙰𝚒\n━━━━━━━━━━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
+      await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+
+      // Supprimer le message d'attente
+      await thinkingMessage.delete();
+
     } catch (error) {
-      console.error('Error sending SMS messages:', error);
-      sendMessage(senderId, { text: 'Sorry, there was an error processing your request.' }, pageAccessToken);
+      console.error('Erreur lors de la requête à l\'IA :', error);
+      // Message de réponse en cas d'erreur
+      await sendMessage(senderId, { text: "Désolé, une erreur est survenue. Veuillez réessayer plus tard." }, pageAccessToken);
     }
   }
 };
+
+// Fonction pour appeler un service AI
+async function callService(service, prompt, senderID) {
+  if (service.isCustom) {
+    try {
+      const response = await axios.get(`${service.url}?${service.param.prompt}=${encodeURIComponent(prompt)}`);
+      return response.data.answer || response.data;
+    } catch (error) {
+      console.error(`Erreur du service personnalisé ${service.url}: ${error.message}`);
+      throw new Error(`Erreur du service ${service.url}: ${error.message}`);
+    }
+  } else {
+    const params = {};
+    for (const [key, value] of Object.entries(service.param)) {
+      params[key] = key === 'uid' ? senderID : encodeURIComponent(prompt);
+    }
+    const queryString = new URLSearchParams(params).toString();
+    try {
+      const response = await axios.get(`${service.url}?${queryString}`);
+      return response.data.answer || response.data;
+    } catch (error) {
+      console.error(`Erreur du service ${service.url}: ${error.message}`);
+      throw new Error(`Erreur du service ${service.url}: ${error.message}`);
+    }
+  }
+}
+
+// Fonction pour obtenir la réponse la plus rapide parmi les services
+async function getFastestValidAnswer(prompt, senderID) {
+  const services = [
+    { url: 'https://gpt-four.vercel.app/gpt', param: { prompt: 'prompt' }, isCustom: true }
+  ];
+
+  const promises = services.map(service => callService(service, prompt, senderID));
+  const results = await Promise.allSettled(promises);
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
+      return result.value;
+    }
+  }
+  throw new Error('Tous les services ont échoué à fournir une réponse valide');
+}
