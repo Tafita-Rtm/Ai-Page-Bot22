@@ -2,48 +2,57 @@ const axios = require('axios');
 const path = require('path');
 
 module.exports = {
-  name: 'claude3',
-  description: 'Posez une question à GPT-4o ou répondez avec une image.',
+  name: '4o',
+  description: 'Pose une question à GPT-4o websrapers(afaka mamaly ny zavatra mitranga ankehitriny).',
   author: 'Deku (rest api)',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const query = args.join(' ');
+    const prompt = args.join(' ');
 
-    if (!query) {
+    if (!prompt) {
       return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
     }
 
     try {
       // Envoyer un message indiquant que GPT-4 est en train de répondre
-      const thinkingMessage = await sendMessage(senderId, { text: 'GPT-4o réfléchit... 🤔' }, pageAccessToken);
+      await sendMessage(senderId, { text: 'GPT-4o websearche en cours⏳...\n\n─────★─────' }, pageAccessToken);
 
       // Si le message auquel on répond contient une image
       if (args.length === 0) {
         const repliedMessage = await fetchRepliedMessage(senderId, pageAccessToken); // Fonction simulée pour obtenir le message répondu
         if (repliedMessage && repliedMessage.attachments && repliedMessage.attachments[0].type === 'image') {
           const imageUrl = repliedMessage.attachments[0].url;
-          const imageQuery = "Décris cette image.";
-          await handleImage(senderId, imageUrl, imageQuery, sendMessage, pageAccessToken);
+          const query = "Décris cette image.";
+          await handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken);
           return;
         }
       }
 
       // URL pour appeler l'API GPT-4o avec une question
-      const apiUrl = `https://deku-rest-api.gleeze.com/api/gpt-4o?q=${encodeURIComponent(query)}&uid=${senderId}`;
+      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
       const response = await axios.get(apiUrl);
 
-      const text = formatResponse(response.data.result);
+      const text = response.data.result;
 
-      // Envoyer la réponse formatée avec un GIF
-      const gifPath = path.join(__dirname, '..', 'assets', 'gpt4.gif');
-      await sendMessage(senderId, { text: text, files: [gifPath] }, pageAccessToken);
+      // Créer un style avec un contour pour la réponse de GPT-4
+      const formattedResponse = `─────★─────\n` +
+                                `✨GPT-4o web scrapers🤖🇲🇬\n\n${text}\n` +
+                                `─────★─────`;
 
-      // Supprimer le message d'attente
-      await thinkingMessage.delete();
+      // Gérer les réponses longues de plus de 2000 caractères
+      const maxMessageLength = 2000;
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+        for (const message of messages) {
+          await sendMessage(senderId, { text: message }, pageAccessToken);
+        }
+      } else {
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      }
 
     } catch (error) {
-      console.error('Erreur lors de la requête à GPT-4o :', error);
-      // Message de réponse en cas d'erreur
-      await sendMessage(senderId, { text: "Désolé, une erreur est survenue. Veuillez réessayer plus tard." }, pageAccessToken);
+      console.error('Error calling GPT-4 API:', error);
+      // Message de réponse d'erreur
+      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
 };
@@ -51,19 +60,24 @@ module.exports = {
 // Fonction pour gérer les images
 async function handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken) {
   try {
-    const geminiUrl = `https://deku-rest-api.gleeze.com/gemini?prompt=${encodeURIComponent(query)}&url=${encodeURIComponent(imageUrl)}`;
-    const { data } = await axios.get(geminiUrl);
-    const formattedResponse = formatResponse(data.gemini);
+    const apiUrl = `https://deku-rest-apis.ooguy.com/gemini?prompt=${encodeURIComponent(query)}&url=${encodeURIComponent(imageUrl)}`;
+    const { data } = await axios.get(apiUrl);
+    const formattedResponse = `─────★─────\n` +
+                              `✨GPT-4o🤖🇲🇬\n\n${data.gemini}\n` +
+                              `─────★─────`;
 
-    // Envoyer la réponse formatée
     await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
   } catch (error) {
-    console.error('Erreur lors de l’analyse de l’image :', error);
+    console.error('Error handling image:', error);
     await sendMessage(senderId, { text: "Désolé, je n'ai pas pu analyser l'image." }, pageAccessToken);
   }
 }
 
-// Fonction pour formater la réponse (remplace les **texte** par un style gothique)
-function formatResponse(response) {
-  return response.replace(/\*\*(.*?)\*\*/g, (match, p1) => global.convertToGothic(p1));
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
+  }
+  return chunks;
 }
