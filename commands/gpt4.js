@@ -1,33 +1,51 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gpt4',
-  description: 'Ask a question to GPT-4',
+  name: 'c',
+  description: 'Pose une question à GPT-4',
   author: 'Deku (rest api)',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
-    try {
-      const apiUrl = `https://deku-rest-api-3ijr.onrender.com/gpt4?prompt=${encodeURIComponent(prompt)}&uid=${senderId}`;
-      const response = await axios.get(apiUrl);
-      const text = response.data.gpt4;
 
-      // Split the response into chunks if it exceeds 2000 characters
+    if (!prompt) {
+      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
+    }
+
+    try {
+      // Envoyer un message indiquant que GPT-4 est en train de répondre
+      await sendMessage(senderId, { text: '💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+
+      // URL pour appeler l'API GPT-4
+      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
+      const response = await axios.get(apiUrl);
+
+      const text = response.data.result;
+
+      // Créer un style avec un contour pour la réponse de GPT-4
+      const formattedResponse = `─────★─────\n` +
+                                `✨GPT-4o mini🤖🇲🇬\n\n${text}\n` +
+                                `─────★─────`;
+
+      // Gérer les réponses longues de plus de 2000 caractères
       const maxMessageLength = 2000;
-      if (text.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(text, maxMessageLength);
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
         for (const message of messages) {
-          sendMessage(senderId, { text: message }, pageAccessToken);
+          await sendMessage(senderId, { text: message }, pageAccessToken);
         }
       } else {
-        sendMessage(senderId, { text }, pageAccessToken);
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
       }
+
     } catch (error) {
       console.error('Error calling GPT-4 API:', error);
-      sendMessage(senderId, { text: 'Sorry, there was an error processing your request.' }, pageAccessToken);
+      // Message de réponse d'erreur
+      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
 };
 
+// Fonction pour découper les messages en morceaux de 2000 caractères
 function splitMessageIntoChunks(message, chunkSize) {
   const chunks = [];
   for (let i = 0; i < message.length; i += chunkSize) {
