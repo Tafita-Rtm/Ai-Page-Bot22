@@ -1,60 +1,74 @@
-const axios = require('axios');
+const axios = require("axios");
+const fs = require('fs-extra');
+const { getStreamFromURL, shortenURL, randomString } = global.utils;
 
 module.exports = {
-  name: 'claude',
-  description: 'Interagir avec l\'IA (GPT-4o)',
-  author: 'Votre Nom',
-  async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
+    name: "spotify",
+    description: "Jouer une chanson à partir de Spotify",
+    version: "1.0.0",
+    role: 0,
+    cooldowns: 10,
+    async execute(api, event, args) {
+        const { threadID, messageID } = event;
+        api.setMessageReaction("🕢", messageID, (err) => {}, true);
 
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Veuillez entrer un message valide." }, pageAccessToken);
-    }
+        let songName = '';
 
-    try {
-      // Envoyer un message indiquant que l'IA est en train de répondre
-      await sendMessage(senderId, { text: '💬 *L\'IA est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+        const fetchSongFromAttachment = async () => {
+            const attachment = event.messageReply.attachments[0];
+            if (attachment.type === "audio" || attachment.type === "video") {
+                const shortenedUrl = await shortenURL(attachment.url);
+                const response = await axios.get(`https://audio-recon-ahcw.onrender.com/kshitiz?url=${encodeURIComponent(shortenedUrl)}`);
+                return response.data.title;
+            } else {
+                throw new Error("Type de pièce jointe non valide.");
+            }
+        };
 
-      // URL pour appeler l'API GPT-4o
-      const apiUrl = `https://free-ai-models.vercel.app/v1/chat/completions`;
-      const response = await axios.post(apiUrl, {
-        model: 'gpt-4o',
-        messages: [
-          { role: 'user', content: prompt }
-        ]
-      });
+        try {
+            if (event.messageReply && event.messageReply.attachments && event.messageReply.attachments.length > 0) {
+                songName = await fetchSongFromAttachment();
+            } else if (args.length === 0) {
+                return api.sendMessage("Veuillez fournir un nom de chanson.", threadID, messageID);
+            } else {
+                songName = args.join(" ");
+            }
 
-      const text = response.data.response;
+            const searchResponse = await axios.get(`https://spotify-play-iota.vercel.app/spotify?query=${encodeURIComponent(songName)}`);
+            const trackURLs = searchResponse.data.trackURLs;
 
-      // Créer un style avec un contour pour la réponse de l'IA
-      const formattedResponse = `─────★─────\n` +
-                                `✨ Réponse de l'IA 🤖\n\n${text}\n` +
-                                `─────★─────`;
+            if (!trackURLs || trackURLs.length === 0) {
+                return api.sendMessage("Aucune piste trouvée pour le nom de chanson fourni.", threadID, messageID);
+            }
 
-      // Gérer les réponses longues de plus de 2000 caractères
-      const maxMessageLength = 2000;
-      if (formattedResponse.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
-        for (const message of messages) {
-          await sendMessage(senderId, { text: message }, pageAccessToken);
+            const trackID = trackURLs[0];
+            const downloadResponse = await axios.get(`https://sp-dl-bice.vercel.app/spotify?id=${encodeURIComponent(trackID)}`);
+            const downloadLink = downloadResponse.data.download_link;
+
+            const localFilePath = await downloadTrack(downloadLink);
+
+            await api.sendMessage({
+                body: `🎧 Lecture : ${songName}`,
+                attachment: fs.createReadStream(localFilePath)
+            }, threadID, messageID);
+
+            console.log("Audio envoyé avec succès.");
+
+        } catch (error) {
+            console.error("Erreur survenue :", error);
+            await api.sendMessage(`Une erreur est survenue : ${error.message}`, threadID, messageID);
         }
-      } else {
-        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-      }
-
-    } catch (error) {
-      console.error('Error calling AI API:', error);
-      // Message de réponse d'erreur
-      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
-  }
 };
 
-// Fonction pour découper les messages en morceaux de 2000 caractères
-function splitMessageIntoChunks(message, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < message.length; i += chunkSize) {
-    chunks.push(message.slice(i, i + chunkSize));
-  }
-  return chunks;
+async function downloadTrack(url) {
+    const stream = await getStreamFromURL(url);
+    const filePath = `${__dirname}/tmp/${randomString()}.mp3`;
+    const writeStream = fs.createWriteStream(filePath);
+    stream.pipe(writeStream);
+
+    return new Promise((resolve, reject) => {
+        writeStream.on('finish', () => resolve(filePath));
+        writeStream.on('error', reject);
+    });
 }
