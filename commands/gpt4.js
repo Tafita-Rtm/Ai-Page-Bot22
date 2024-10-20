@@ -2,8 +2,8 @@ const axios = require('axios');
 
 module.exports = {
   name: 'gpt4',
-  description: 'Pose une question à GPT-4 via Hercai API',
-  author: 'oliver gab | Liane Cagara',
+  description: 'Pose une question à GPT-4',
+  author: 'Votre Nom',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
 
@@ -15,15 +15,15 @@ module.exports = {
       // Envoyer un message indiquant que GPT-4 est en train de répondre
       await sendMessage(senderId, { text: '💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
 
-      // URL pour appeler l'API Hercai avec le modèle GPT-4
-      const apiUrl = `https://metoushela-rest-api-tp5g.onrender.com/api/gpt4o?prompt=${encodeURIComponent(prompt)}&uid=100${senderId}`;
+      // URL pour appeler l'API GPT-4
+      const apiUrl = `https://nash-api-end.onrender.com/freegpt4o8k?question=${encodeURIComponent(prompt)}`;
       const response = await axios.get(apiUrl);
 
-      const text = response.data.result;
+      const text = JSON.parse(response.data.answer).response;
 
       // Créer un style avec un contour pour la réponse de GPT-4
       const formattedResponse = `─────★─────\n` +
-                                `✨GPT-4 via Hercai🤖\n\n${text}\n` +
+                                `✨GPT-4o mini🤖🇲🇬\n\n${text}\n` +
                                 `─────★─────`;
 
       // Gérer les réponses longues de plus de 2000 caractères
@@ -38,7 +38,7 @@ module.exports = {
       }
 
     } catch (error) {
-      console.error('Error calling Hercai API:', error);
+      console.error('Error calling GPT-4 API:', error);
       // Message de réponse d'erreur
       await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
