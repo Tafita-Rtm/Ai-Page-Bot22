@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gpt4o',
+  name: 'rtmai',
   description: 'Gpt4 AI with multiple conversation handling',
   author: 'Dipto',
   async execute(senderId, args, pageAccessToken, sendMessage) {
