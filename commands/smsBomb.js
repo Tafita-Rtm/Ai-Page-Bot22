@@ -13,7 +13,7 @@ module.exports = {
 
     try {
       // Envoyer un message indiquant que l'IA réfléchit
-      const thinkingMessage = await sendMessage(senderId, { text: 'IA réfléchit... 🤔' }, pageAccessToken);
+      const thinkingMessage = await sendMessage(senderId, { text: '🪐rtm réfléchit... 🤔' }, pageAccessToken);
 
       // Appel de la fonction pour obtenir la réponse la plus rapide parmi les services
       const fastestAnswer = await getFastestValidAnswer(query, senderId);
@@ -28,7 +28,7 @@ module.exports = {
     } catch (error) {
       console.error('Erreur lors de la requête à l\'IA :', error);
       // Message de réponse en cas d'erreur
-      await sendMessage(senderId, { text: "." }, pageAccessToken);
+      await sendMessage(senderId, { text: "" }, pageAccessToken);
     }
   }
 };
