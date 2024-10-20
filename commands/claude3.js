@@ -1,76 +1,67 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
-
-// Fonction pour s'assurer que le répertoire "temp" existe
-function ensureTempDirectory() {
-    const tempDir = path.resolve(__dirname, 'temp');
-    if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
-    }
-    return tempDir;
-}
 
 module.exports = {
-    name: 'pinterest',
-    description: 'Fetches Pinterest images based on a search query.',
+    name: 'ai5',
+    description: 'Chat with the AI',
     author: 'Deku (rest api)',
     async execute(senderId, args, pageAccessToken, sendMessage) {
-        const query = args.join(' ');
+        const userMessage = args.join(' ');
 
-        if (!query) {
-            return sendMessage(senderId, { text: "❗ Veuillez fournir une requête de recherche pour les images Pinterest.\n\nExemple : pinterest cats" }, pageAccessToken);
+        if (!userMessage) {
+            return sendMessage(senderId, { 
+                text: "[ GPT 4o ]\n\n❗ Please provide a message to chat with the AI.\n\nExample: ai5 Hello!" 
+            }, pageAccessToken);
         }
 
         try {
-            // Envoyer un message indiquant que la recherche est en cours
-            await sendMessage(senderId, { text: '🔍 *Recherche d\'images sur Pinterest* ⏳...\n\n─────★─────' }, pageAccessToken);
+            // Envoyer un message indiquant que le traitement est en cours
+            await sendMessage(senderId, { 
+                text: "[ GPT 4o ]\n\n⏳ Please wait while I process your request..." 
+            }, pageAccessToken);
 
-            // Requête à l'API pour récupérer des images
-            const apiUrl = `https://deku-rest-apis.ooguy.com/api/pinterest?q=${encodeURIComponent(query)}`;
-            const response = await axios.get(apiUrl);
-            const images = response.data.result;
+            // Requête à l'API pour obtenir la réponse de l'IA
+            const apiUrl = 'https://free-ai-models.vercel.app/v1/chat/completions';
+            const response = await axios.post(apiUrl, {
+                model: 'gpt-4o',
+                messages: [
+                    { role: 'system', content: 'You are AI(gpt4-o)' },
+                    { role: 'user', content: userMessage }
+                ]
+            });
 
-            // Vérifier si des images ont été trouvées
-            if (!images || images.length === 0) {
-                return sendMessage(senderId, { text: "Aucune image trouvée pour votre requête." }, pageAccessToken);
-            }
+            const aiResponse = response.data.response;
 
-            // Créer un message pour indiquer que les images sont en cours d'envoi
+            // Formatage de la réponse de l'IA
             const formattedResponse = `─────★─────\n` +
-                                      `✨Images Pinterest pour : "${query}"\n\n` +
+                                      `✨GPT-4o mini🤖🇲🇬\n\n${aiResponse}\n` +
                                       `─────★─────`;
-            await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
 
-            // Assurer que le répertoire temp existe
-            const tempDir = ensureTempDirectory();
-
-            // Télécharger et envoyer chaque image
-            for (const imageUrl of images) {
-                const imagePath = path.join(tempDir, `${Date.now()}.jpg`);
-                const writer = fs.createWriteStream(imagePath);
-
-                const imageResponse = await axios.get(imageUrl, { responseType: 'stream' });
-                imageResponse.data.pipe(writer);
-
-                await new Promise((resolve, reject) => {
-                    writer.on('finish', resolve);
-                    writer.on('error', reject);
-                });
-
-                // Envoyer l'image téléchargée
-                await sendMessage(senderId, {
-                    attachment: fs.createReadStream(imagePath)
-                }, pageAccessToken);
-
-                // Supprimer le fichier temporaire après envoi
-                fs.unlinkSync(imagePath);
+            // Gérer les réponses longues de plus de 2000 caractères
+            const maxMessageLength = 2000;
+            if (formattedResponse.length > maxMessageLength) {
+                const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+                for (const message of messages) {
+                    await sendMessage(senderId, { text: message }, pageAccessToken);
+                }
+            } else {
+                await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
             }
 
         } catch (error) {
-            console.error('Erreur lors de l\'appel à l\'API Pinterest:', error);
+            console.error('Error calling GPT-4o API:', error);
             // Message de réponse d'erreur
-            await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
+            await sendMessage(senderId, { 
+                text: '[ GPT 4o ]\n\n❌ Error: Unable to process your request. Please try again later.' 
+            }, pageAccessToken);
         }
     }
 };
+
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+    const chunks = [];
+    for (let i = 0; i < message.length; i += chunkSize) {
+        chunks.push(message.slice(i, i + chunkSize));
+    }
+    return chunks;
+}
