@@ -1,8 +1,8 @@
 const { callGeminiAPI } = require('../utils/callGeminiAPI');
 
 module.exports = {
-  name: 'gpt4o',
-  description: '📩 Utiliser Gemini',
+  name: 'g',
+  description: '📩 Utiliser le comande G pour utiliser Gemini',
   author: 'ChatGPT',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
