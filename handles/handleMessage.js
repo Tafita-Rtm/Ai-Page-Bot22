@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { sendMessage } = require('./sendMessage');
+const autoImageAnalyzer = require('./autoImageAnalyzer'); // Importer l'analyseur d'image
 
 const commands = new Map();
 
@@ -34,25 +35,11 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
     // Envoyer un message pour informer que l'image est en cours d'analyse
     await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image... Veuillez patienter ⏳' }, pageAccessToken);
 
-    // Analyser l'image avec OCR.space
-    const extractedText = await analyzeImageWithOCRSpace(imageUrl);
-
-    if (!extractedText) {
-      await sendMessage(senderId, { text: "Je n'ai pas pu extraire de texte de cette image." }, pageAccessToken);
-      return;
-    }
-
-    // Sauvegarder le texte extrait dans l'état de l'utilisateur
-    userStates.set(senderId, { extractedText });
-
-    // Envoyer le texte extrait directement à GPT-4o
-    const gpt4oCommand = commands.get('gpt4o');
-    if (gpt4oCommand) {
-      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage); // GPT-4o traite le texte extrait
-    }
+    // Appel de l'analyse d'image (remplace OCR par votre analyseur)
+    await autoImageAnalyzer.execute(senderId, [{ type: 'photo', url: imageUrl }], pageAccessToken, sendMessage);
 
   } catch (error) {
-    console.error('Erreur lors de l\'analyse de l\'image avec OCR.space :', error);
+    console.error('Erreur lors de l\'analyse de l\'image :', error);
     await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
   }
 }
@@ -90,35 +77,6 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
     } else {
       await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
     }
-  }
-}
-
-async function analyzeImageWithOCRSpace(imageUrl) {
-  const apiKey = 'K87729656488957'; // Remplacez par votre clé d'API OCR.space
-  const ocrApiEndpoint = 'https://api.ocr.space/parse/image';
-
-  try {
-    const formData = new URLSearchParams();
-    formData.append('apikey', apiKey);
-    formData.append('url', imageUrl);
-    formData.append('language', 'eng'); // ou 'fre' pour le français
-
-    const response = await axios.post(ocrApiEndpoint, formData);
-
-    if (response.data.IsErroredOnProcessing) {
-      throw new Error(response.data.ErrorMessage[0]);
-    }
-
-    // Extraire le texte détecté
-    const parsedResults = response.data.ParsedResults;
-    if (parsedResults && parsedResults.length > 0) {
-      return parsedResults[0].ParsedText.trim();
-    }
-
-    return '';
-  } catch (error) {
-    console.error('Erreur lors de l\'analyse OCR avec OCR.space :', error);
-    throw new Error('Erreur lors de l\'analyse avec OCR.space');
   }
 }
 
