@@ -4,6 +4,7 @@ module.exports = {
   name: 'gpt4o',
   description: 'Pose une question à plusieurs services AI et obtient la réponse la plus rapide.',
   author: 'ArYAN',
+  
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const query = args.join(' ');
 
@@ -27,8 +28,28 @@ module.exports = {
 
     } catch (error) {
       console.error('Erreur lors de la requête à l\'IA :', error);
-      // Message de réponse en cas d'erreur
-      await sendMessage(senderId, { text: "" }, pageAccessToken);
+      await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de l\'IA.' }, pageAccessToken);
+    }
+  },
+
+  async handleImage(senderId, imageUrl, prompt, sendMessage, pageAccessToken) {
+    try {
+      // Envoyer un message indiquant que l'IA réfléchit sur l'image
+      const thinkingMessage = await sendMessage(senderId, { text: '🖼️ Analyzing the image... Please wait ⏳' }, pageAccessToken);
+
+      // Appel de la fonction pour obtenir la description de l'image
+      const description = await getFastestValidAnswerForImage(imageUrl, senderId);
+
+      // Envoyer la description formatée
+      const formattedResponse = `🖼️ | Image Analysis:\n━━━━━━━━━━━━━━━━\n${description}\n━━━━━━━━━━━━━━━━`;
+      await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+
+      // Supprimer le message d'attente
+      await thinkingMessage.delete();
+      
+    } catch (error) {
+      console.error('Erreur lors de l\'analyse de l\'image avec l\'IA :', error);
+      await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
     }
   }
 };
@@ -59,7 +80,7 @@ async function callService(service, prompt, senderID) {
   }
 }
 
-// Fonction pour obtenir la réponse la plus rapide parmi les services
+// Fonction pour obtenir la réponse la plus rapide parmi les services pour un texte
 async function getFastestValidAnswer(prompt, senderID) {
   const services = [
     { url: 'https://gpt-four.vercel.app/gpt', param: { prompt: 'prompt' }, isCustom: true }
@@ -73,4 +94,20 @@ async function getFastestValidAnswer(prompt, senderID) {
     }
   }
   throw new Error('Tous les services ont échoué à fournir une réponse valide');
+}
+
+// Fonction pour obtenir la réponse la plus rapide parmi les services pour une image
+async function getFastestValidAnswerForImage(imageUrl, senderID) {
+  const services = [
+    { url: 'https://gpt-four.vercel.app/gpt', param: { prompt: 'imageUrl' }, isCustom: true }
+  ];
+
+  const promises = services.map(service => callService(service, imageUrl, senderID));
+  const results = await Promise.allSettled(promises);
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value) {
+      return result.value;
+    }
+  }
+  throw new Error('Tous les services ont échoué à analyser l\'image');
 }
