@@ -1,8 +1,8 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gpt4o128k',
-  description: 'Pose une question à GPT-4o en utilisant l\'API Kenlie Jugarap.',
+  name: 'gptv1',
+  description: 'Pose une question à GPT-v1 en utilisant l\'API Kenlie Jugarap.',
   author: 'Deku (rest api)',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
@@ -12,11 +12,11 @@ module.exports = {
     }
 
     try {
-      // Envoyer un message indiquant que GPT-4 est en train de répondre
-      await sendMessage(senderId, { text: 'GPT-4o128k en train de traiter ta requête⏳...\n\n─────★─────' }, pageAccessToken);
+      // Envoyer un message indiquant que GPT-v1 est en train de répondre
+      await sendMessage(senderId, { text: 'GPT-v1 en train de traiter ta requête⏳...\n\n─────★─────' }, pageAccessToken);
 
-      // URL pour appeler l'API GPT-4o avec une question
-      const apiUrl = `https://api.kenliejugarap.com/freegpt4o128k/`;
+      // URL pour appeler l'API GPT-v1 avec une question
+      const apiUrl = `https://api.kenliejugarap.com/freegptv1/`;
       const response = await axios.get(apiUrl, {
         params: { question: encodeURIComponent(prompt) },
         headers: {
@@ -39,9 +39,9 @@ module.exports = {
       const unwantedTextPattern = /\n\n.*(https:\/\/click2donate\.kenliejugarap\.com.*)/s;
       result = result.replace(unwantedTextPattern, '');
 
-      // Créer un style avec un contour pour la réponse de GPT-4
+      // Créer un style avec un contour pour la réponse de GPT-v1
       const formattedResponse = `─────★─────\n` +
-                                `✨GPT-4o128k🤖\n\n${result}\n` +
+                                `✨GPT-v1🤖\n\n${result}\n` +
                                 `─────★─────`;
 
       // Gérer les réponses longues de plus de 2000 caractères
@@ -56,7 +56,7 @@ module.exports = {
       }
 
     } catch (error) {
-      console.error('Error calling GPT-4 API:', error);
+      console.error('Error calling GPT-v1 API:', error);
       await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
