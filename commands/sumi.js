@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gpt4o',
+  name: 'gpto',
   description: 'Generate text using GPT-4o API',
   author: 'Carl John Villavito',
   async execute(senderId, args, pageAccessToken, sendMessage) {
