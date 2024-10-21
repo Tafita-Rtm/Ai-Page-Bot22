@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'claude',
+  name: 'gpt4o',
   description: 'Pose une question à plusieurs services AI et obtient la réponse la plus rapide.',
   author: 'ArYAN',
   async execute(senderId, args, pageAccessToken, sendMessage) {
@@ -13,13 +13,13 @@ module.exports = {
 
     try {
       // Envoyer un message indiquant que l'IA réfléchit
-      const thinkingMessage = await sendMessage(senderId, { text: '🪐rtm réfléchit... 🤔' }, pageAccessToken);
+      const thinkingMessage = await sendMessage(senderId, { text: '🪐rtm gpt4 réfléchit⏳... 🤔' }, pageAccessToken);
 
       // Appel de la fonction pour obtenir la réponse la plus rapide parmi les services
       const fastestAnswer = await getFastestValidAnswer(query, senderId);
 
       // Envoyer la réponse formatée
-      const formattedResponse = `🇲🇬 | rtm ai\n━━━━━━━━━━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
+      const formattedResponse = `🇲🇬 | rtm ai gpt4 ⏳\n━━━━━━━━━━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
       await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
 
       // Supprimer le message d'attente
