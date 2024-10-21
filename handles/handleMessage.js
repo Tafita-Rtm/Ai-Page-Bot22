@@ -42,6 +42,9 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
       return;
     }
 
+    // Sauvegarder le texte extrait dans l'état de l'utilisateur
+    userStates.set(senderId, { extractedText });
+
     // Envoyer le texte extrait directement à GPT-4o
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
@@ -60,6 +63,7 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
   const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
 
   const command = commands.get(commandName);
+  const userState = userStates.get(senderId); // Récupérer l'état de l'utilisateur (texte extrait)
 
   if (command) {
     // Si une commande est trouvée, l'exécuter
@@ -74,7 +78,11 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
       try {
-        await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage); // Envoyer le texte sans commande à GPT-4o
+        // Ajouter le texte extrait au message si disponible
+        const contextText = userState ? userState.extractedText : '';
+        const fullMessage = contextText ? `${contextText}\n\n${text}` : text;
+
+        await gpt4oCommand.execute(senderId, [fullMessage], pageAccessToken, sendMessage); // Envoyer le texte avec le contexte extrait à GPT-4o
       } catch (error) {
         console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
         await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
