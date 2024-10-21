@@ -26,7 +26,7 @@ module.exports = {
       await thinkingMessage.delete();
     } catch (error) {
       console.error('Erreur lors de la requête à GPT-4o :', error);
-      await sendMessage(senderId, { text: "Erreur lors de l'analyse de la question." }, pageAccessToken);
+      await sendMessage(senderId, { text: "" }, pageAccessToken);
     }
   }
 };
