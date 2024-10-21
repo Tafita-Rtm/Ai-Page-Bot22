@@ -1,55 +1,47 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gpt4',
-  description: 'Pose une question à GPT-4',
-  author: 'Votre Nom',
-  async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
+  name: 'ai12',
+  description: 'Interact with GPT-4 API or analyze images',
+  async execute(senderId, args, pageAccessToken, sendMessage, messageReply) {
+    const query = args.join(' ') || "hi";
+    const header = "(⁠•⁠ᴗ⁠•⁠⁠) | rtm gpt4o\n・──────────────・";
+    const footer = "・───── >ᴗ< ──────・";
 
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
+    // Vérifier si une image est attachée dans la réponse
+    if (messageReply && messageReply.attachments && messageReply.attachments[0]?.type === "photo") {
+        const attachment = messageReply.attachments[0];
+        const imageURL = attachment.url;
+
+        const geminiUrl = `https://joncll.serv00.net/chat.php?ask=${encodeURIComponent(query)}&imgurl=${encodeURIComponent(imageURL)}`;
+        try {
+            const response = await axios.get(geminiUrl);
+            const { vision } = response.data;
+
+            if (vision) {
+                return await sendMessage(senderId, { text: `${header}\n${vision}\n${footer}` }, pageAccessToken);
+            } else {
+                return await sendMessage(senderId, { text: `${header}\nFailed to recognize the image.\n${footer}` }, pageAccessToken);
+            }
+        } catch (error) {
+            console.error("Error fetching image recognition:", error);
+            return await sendMessage(senderId, { text: `${header}\nAn error occurred while processing the image.\n${footer}` }, pageAccessToken);
+        }
     }
 
+    // Gérer les requêtes texte avec GPT-4
     try {
-      // Envoyer un message indiquant que GPT-4 est en train de répondre
-      await sendMessage(senderId, { text: '💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+        const apiUrl = `https://lorex-gpt4.onrender.com/api/gpt4?prompt=${encodeURIComponent(query)}&uid=${senderId}`;
+        const { data } = await axios.get(apiUrl);
 
-      // URL pour appeler l'API GPT-4
-      const apiUrl = `https://nash-api-end.onrender.com/freegpt4o8k?question=${encodeURIComponent(prompt)}`;
-      const response = await axios.get(apiUrl);
-
-      const text = JSON.parse(response.data.answer).response;
-
-      // Créer un style avec un contour pour la réponse de GPT-4
-      const formattedResponse = `─────★─────\n` +
-                                `✨GPT-4o mini🤖🇲🇬\n\n${text}\n` +
-                                `─────★─────`;
-
-      // Gérer les réponses longues de plus de 2000 caractères
-      const maxMessageLength = 2000;
-      if (formattedResponse.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
-        for (const message of messages) {
-          await sendMessage(senderId, { text: message }, pageAccessToken);
+        if (data && data.response) {
+            await sendMessage(senderId, { text: `${header}\n${data.response}\n${footer}` }, pageAccessToken);
+        } else {
+            await sendMessage(senderId, { text: `${header}\nSorry, I couldn't get a response from the API.\n${footer}` }, pageAccessToken);
         }
-      } else {
-        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-      }
-
     } catch (error) {
-      console.error('Error calling GPT-4 API:', error);
-      // Message de réponse d'erreur
-      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
+        console.error("Error fetching from GPT-4 API:", error);
+        await sendMessage(senderId, { text: `${header}\nAn error occurred while trying to reach the API.\n${footer}` }, pageAccessToken);
     }
   }
 };
-
-// Fonction pour découper les messages en morceaux de 2000 caractères
-function splitMessageIntoChunks(message, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < message.length; i += chunkSize) {
-    chunks.push(message.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
