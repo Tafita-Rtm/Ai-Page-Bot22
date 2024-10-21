@@ -1,28 +1,37 @@
-const { callGeminiAPI } = require('../utils/callGeminiAPI');
+const axios = require('axios');
 
 module.exports = {
   name: 'gemini',
-  description: '📩 Utiliser le comande G pour utiliser Gemini',
-  author: 'ChatGPT',
-  async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
+  description: 'Analyse une image et renvoie une description directement',
+  author: 'Deku (adapté de vex_kshitiz)',
+  
+  async execute(senderId, event, pageAccessToken, sendMessage) {
+    const prompt = event.body; // le texte du message original (s'il y en a un)
+    const attachments = event.attachments || []; // vérifier s'il y a des pièces jointes (images)
+
+    // Vérifier s'il y a une image jointe
+    if (attachments.length === 0 || !attachments[0].url) {
+      return sendMessage(senderId, { text: "Veuillez joindre une image pour analyse." }, pageAccessToken);
+    }
+
+    const photoUrl = attachments[0].url; // URL de l'image
+    const apiUrl = `https://sandipbaruwal.onrender.com/gemini2?prompt=${encodeURIComponent(prompt)}&url=${encodeURIComponent(photoUrl)}`;
 
     try {
-      // Message pour indiquer que Gemini est en train de répondre
-      const waitingMessage = {
-        text: '💬 *Gemini est en train de te répondre* ⏳...\n\n─────★─────'
-      };
-      await sendMessage(senderId, waitingMessage, pageAccessToken);
+      // Envoyer un message indiquant que l'analyse de l'image est en cours
+      await sendMessage(senderId, { text: '💬 *Analyse de l\'image en cours* ⏳...\n\n─────★─────' }, pageAccessToken);
 
-      // Appel à l'API Gemini
-      const response = await callGeminiAPI(prompt);
+      // Appel de l'API pour analyser l'image
+      const response = await axios.get(apiUrl);
 
-      // Créer un style avec un contour pour la réponse de Gemini
+      const description = response.data.answer;
+
+      // Créer un style avec un contour pour la description de l'image
       const formattedResponse = `─────★─────\n` +
-                                `✨ Gemini 🤖🇲🇬\n\n${response}\n` +
+                                `✨Résultat de l'analyse🤖\n\n${description}\n` +
                                 `─────★─────`;
 
-      // Gérer les réponses de plus de 2000 caractères
+      // Gérer les réponses longues de plus de 2000 caractères
       const maxMessageLength = 2000;
       if (formattedResponse.length > maxMessageLength) {
         const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
@@ -32,9 +41,11 @@ module.exports = {
       } else {
         await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
       }
+
     } catch (error) {
-      console.error('Error calling Gemini API:', error);
-      await sendMessage(senderId, { text: 'Une erreur est survenue.' }, pageAccessToken);
+      console.error('Error calling image analysis API:', error);
+      // Message de réponse d'erreur
+      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue lors de l\'analyse de l\'image. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
 };
