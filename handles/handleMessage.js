@@ -24,13 +24,7 @@ async function handleMessage(event, pageAccessToken) {
     await handleImage(senderId, imageUrl, pageAccessToken, sendMessage);
   } else if (event.message.text) {
     const messageText = event.message.text.trim();
-    // Vérifier si l'utilisateur est dans une interaction en cours
-    if (userStates.has(senderId)) {
-      const userState = userStates.get(senderId);
-      await handleUserResponse(senderId, messageText, userState, pageAccessToken, sendMessage);
-    } else {
-      await handleText(senderId, messageText, pageAccessToken, sendMessage);
-    }
+    await handleText(senderId, messageText, pageAccessToken, sendMessage);
   }
 }
 
@@ -48,13 +42,11 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
       return;
     }
 
-    // Sauvegarder le texte extrait dans l'état de l'utilisateur
-    userStates.set(senderId, { imageText: extractedText });
-
-    // Demander à l'utilisateur ce qu'il veut faire avec l'image
-    await sendMessage(senderId, {
-      text: 'Que voulez-vous faire avec cette image ? Par exemple, vous pouvez dire "Réponds aux questions" ou "Analyse cette image".'
-    }, pageAccessToken);
+    // Envoyer le texte extrait directement à GPT-4o
+    const gpt4oCommand = commands.get('gpt4o');
+    if (gpt4oCommand) {
+      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage); // GPT-4o traite le texte extrait
+    }
 
   } catch (error) {
     console.error('Erreur lors de l\'analyse de l\'image avec OCR.space :', error);
@@ -62,32 +54,7 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   }
 }
 
-// Gestion de la réponse utilisateur après envoi de l'image
-async function handleUserResponse(senderId, userResponse, userState, pageAccessToken, sendMessage) {
-  const imageText = userState.imageText; // Récupérer le texte extrait de l'image
-
-  // Interpréter la réponse de l'utilisateur
-  if (/réponds aux questions/i.test(userResponse)) {
-    // Si l'utilisateur veut que GPT-4 réponde aux questions dans l'image
-    const gpt4oCommand = commands.get('gpt4o');
-    if (gpt4oCommand) {
-      await gpt4oCommand.execute(senderId, [imageText], pageAccessToken, sendMessage); // Envoyer le texte à GPT-4o pour répondre
-    }
-  } else if (/analyse/i.test(userResponse)) {
-    // Si l'utilisateur demande une analyse (vous pouvez personnaliser davantage cette partie)
-    await sendMessage(senderId, { text: 'D\'accord, j\'analyse l\'image...' }, pageAccessToken);
-    // Ajoutez ici des fonctionnalités supplémentaires si nécessaire
-  } else {
-    // Si la réponse de l'utilisateur n'est pas claire
-    await sendMessage(senderId, {
-      text: 'Je n\'ai pas compris ce que vous voulez faire avec cette image. Vous pouvez dire "Réponds aux questions" ou "Analyse cette image".'
-    }, pageAccessToken);
-  }
-
-  // Effacer l'état de l'utilisateur après l'interaction
-  userStates.delete(senderId);
-}
-
+// Gestion des textes envoyés
 async function handleText(senderId, text, pageAccessToken, sendMessage) {
   const args = text.split(' '); // Diviser le texte en arguments
   const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
@@ -103,12 +70,11 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
       await sendMessage(senderId, { text: `Erreur lors de l'exécution de la commande ${commandName}.` }, pageAccessToken);
     }
   } else {
-    // Si aucune commande n'est trouvée, envoyer le texte directement à GPT-4o
-    await sendMessage(senderId, { text: "Je vais envoyer votre message à GPT-4o..." }, pageAccessToken);
+    // Si aucune commande n'est trouvée, envoyer la question directement à GPT-4o
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
       try {
-        await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage); // Envoyer la question à GPT-4o
+        await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage); // Envoyer le texte sans commande à GPT-4o
       } catch (error) {
         console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
         await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
