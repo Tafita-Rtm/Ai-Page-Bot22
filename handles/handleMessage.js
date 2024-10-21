@@ -20,37 +20,16 @@ async function handleMessage(event, pageAccessToken) {
     const imageUrl = event.message.attachments[0].payload.url;
     await handleImage(senderId, imageUrl, pageAccessToken, sendMessage);
   } else if (event.message.text) {
-    const messageText = event.message.text.trim().toLowerCase();
-    const args = messageText.split(' ');
-    const commandName = args.shift();
-
-    // Si une commande est trouvée, exécute la commande
-    if (commands.has(commandName)) {
-      const command = commands.get(commandName);
-      try {
-        await command.execute(senderId, args, pageAccessToken, sendMessage);
-      } catch (error) {
-        console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
-        await sendMessage(senderId, { text: 'Erreur lors de l\'exécution de la commande.' }, pageAccessToken);
-      }
-    } else {
-      // Si aucune commande n'est trouvée, GPT-4o répond par défaut
-      const gpt4oCommand = commands.get('gpt4o');
-      if (gpt4oCommand) {
-        try {
-          await gpt4oCommand.execute(senderId, [messageText], pageAccessToken, sendMessage);
-        } catch (error) {
-          console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
-          await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
-        }
-      }
-    }
+    const messageText = event.message.text.trim();
+    await handleText(senderId, messageText, pageAccessToken, sendMessage);
   }
 }
 
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
     await sendMessage(senderId, { text: '🖼️ Analyzing the image... Please wait ⏳' }, pageAccessToken);
+    
+    // Appel de l'API OCR pour analyser l'image
     const extractedText = await analyzeImageWithOCROnline(imageUrl, 'K87729656488957');
 
     if (!extractedText) {
@@ -58,6 +37,7 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
       return;
     }
 
+    // Envoyer le texte extrait à GPT-4o
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
       await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage);
@@ -68,13 +48,25 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   }
 }
 
+async function handleText(senderId, text, pageAccessToken, sendMessage) {
+  const gpt4oCommand = commands.get('gpt4o');
+  if (gpt4oCommand) {
+    try {
+      await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage);
+    } catch (error) {
+      console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
+      await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
+    }
+  }
+}
+
 async function analyzeImageWithOCROnline(imageUrl, apiKey) {
   try {
     const response = await axios.post('https://api.ocr.space/parse/image', null, {
       params: {
         apikey: apiKey,
         url: imageUrl,
-        language: 'eng',
+        language: 'eng', // Vous pouvez changer la langue ici si nécessaire
       },
     });
 
