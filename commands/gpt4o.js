@@ -19,7 +19,7 @@ module.exports = {
       const fastestAnswer = await getFastestValidAnswer(query, senderId);
 
       // Envoyer la réponse formatée
-      const formattedResponse = `🇲🇬 | GPT-4o\n━━━━━━━━━━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
+      const formattedResponse = `🇲🇬 | GPT-4omini rtm🧾\n━━━━━━━━✨━━━━━━━\n${fastestAnswer}\n━━━━━━━━━━━━━━━━`;
       await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
 
       // Supprimer le message d'attente
