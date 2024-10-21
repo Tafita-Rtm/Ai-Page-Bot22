@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gemini_image_analyzer',
+  name: 'gemini',
   description: 'Analyse une image et renvoie une description directement',
   author: 'Deku (adapté de vex_kshitiz)',
   
