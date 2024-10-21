@@ -1,12 +1,15 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'ai12',
+  name: 'chatgpt',
   description: 'Interact with GPT-4 API or analyze images',
   async execute(senderId, args, pageAccessToken, sendMessage, messageReply) {
     const query = args.join(' ') || "hi";
-    const header = "(⁠•⁠ᴗ⁠•⁠⁠) | rtm gpt4o\n・──────────────・";
+    const header = "(⁠•⁠ᴗ⁠•⁠) | Rtm 𝙰𝚒\n・──────────────・";
     const footer = "・───── >ᴗ< ──────・";
+
+    // Envoyer un message indiquant que GPT-4 est en train de répondre
+    await sendMessage(senderId, { text: '💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
 
     // Vérifier si une image est attachée dans la réponse
     if (messageReply && messageReply.attachments && messageReply.attachments[0]?.type === "photo") {
