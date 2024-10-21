@@ -1,36 +1,49 @@
-const axios = require('axios');
+const { callGeminiAPI } = require('../utils/callGeminiAPI');
 
 module.exports = {
-  name: 'gpt',
-  description: 'Ask a question to GPT-4',
+  name: 'g',
+  description: '📩 Utiliser le comande G pour utiliser Gemini',
+  author: 'ChatGPT',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const query = args.join(' ');
-
-    if (!query) {
-      return sendMessage(senderId, { text: "🗨️✨ | 𝙲𝚑𝚊𝚝𝙶𝙿𝚃\n━━━━━━━━━━━━━━━━\nHello! How can I assist you today?\n━━━━━━━━━━━━━━━━" }, pageAccessToken);
-    }
+    const prompt = args.join(' ');
 
     try {
-      // Indiquer que GPT-4 est en train de répondre
-      await sendMessage(senderId, { text: '💬 *GPT-4 is typing* ⏳...\n\n─────★─────' }, pageAccessToken);
+      // Message pour indiquer que Gemini est en train de répondre
+      const waitingMessage = {
+        text: '💬 *Gemini est en train de te répondre* ⏳...\n\n─────★─────'
+      };
+      await sendMessage(senderId, waitingMessage, pageAccessToken);
 
-      // Envoyer la requête à l'API GPT-4
-      const apiUrl = `https://deku-rest-apis.ooguy.com/gpt4?prompt=${encodeURIComponent(query)}&uid=${senderId}`;
-      const response = await axios.get(apiUrl);
+      // Appel à l'API Gemini
+      const response = await callGeminiAPI(prompt);
 
-      const gptResponse = response.data.gpt4;
+      // Créer un style avec un contour pour la réponse de Gemini
+      const formattedResponse = `─────★─────\n` +
+                                `✨ Gemini 🤖🇲🇬\n\n${response}\n` +
+                                `─────★─────`;
 
-      // Vérifier et envoyer la réponse de GPT-4
-      if (gptResponse) {
-        const formattedResponse = `─────★─────\n✨GPT-4 Response\n\n${gptResponse}\n─────★─────`;
-
-        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      // Gérer les réponses de plus de 2000 caractères
+      const maxMessageLength = 2000;
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+        for (const message of messages) {
+          await sendMessage(senderId, { text: message }, pageAccessToken);
+        }
       } else {
-        await sendMessage(senderId, { text: "Error: Unexpected response format from API." }, pageAccessToken);
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
       }
     } catch (error) {
-      console.error('API call failed: ', error);
-      await sendMessage(senderId, { text: 'Sorry, an error occurred. Please try again later.' }, pageAccessToken);
+      console.error('Error calling Gemini API:', error);
+      await sendMessage(senderId, { text: 'Une erreur est survenue.' }, pageAccessToken);
     }
   }
 };
+
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
