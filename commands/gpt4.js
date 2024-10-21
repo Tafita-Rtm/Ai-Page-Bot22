@@ -1,77 +1,70 @@
 const axios = require('axios');
-const fs = require('fs-extra');
-const path = require('path');
 
 module.exports = {
   name: 'spotify',
   description: 'Play a song from Spotify',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const query = args.join(' ') || "default song";
-    const cacheFolder = path.join(__dirname, 'cache');
     const header = "🎶 Spotify Music Player\n───────────────";
     const footer = "───────────────";
 
-    // Vérifier et créer le dossier de cache si nécessaire
-    async function ensureCacheFolderExists() {
-      try {
-        await fs.ensureDir(cacheFolder);
-      } catch (error) {
-        console.error('Error creating cache folder:', error);
-      }
+    // Fonction pour extraire le titre de la chanson et l'artiste
+    const { songTitle, artist } = getSongTitleAndArtist(args);
+
+    if (!songTitle) {
+      return sendMessage(senderId, { text: `${header}\nPlease provide a song title to play.\n${footer}` }, pageAccessToken);
     }
-
-    // Appeler la fonction pour vérifier si le cache existe
-    await ensureCacheFolderExists();
-
-    if (!query) {
-      return sendMessage(senderId, { text: `${header}\nPlease provide a valid song name.\n${footer}` }, pageAccessToken);
-    }
-
-    // Envoyer un message indiquant que la chanson est en cours de récupération
-    await sendMessage(senderId, { text: `🎧 *Searching for "${query}"...* ⏳\n\n─────★─────` }, pageAccessToken);
 
     try {
-      // Services disponibles pour récupérer les URLs des pistes
+      // Envoyer un message indiquant que la chanson est en cours de recherche
+      await sendMessage(senderId, { text: `🔍 *Searching for "${songTitle}" by ${artist || "unknown artist"}...* ⏳` }, pageAccessToken);
+
+      // Services pour récupérer les URLs de la chanson
       const services = [
-        { url: 'https://spotify-play-iota.vercel.app/spotify', params: { query } },
-        { url: 'http://zcdsphapilist.replit.app/spotify', params: { q: query } },
-        { url: 'https://openapi-idk8.onrender.com/search-song', params: { song: query } },
-        { url: 'https://markdevs-last-api.onrender.com/search/spotify', params: { q: query } }
+        { url: 'https://spotify-play-iota.vercel.app/spotify', params: { query: songTitle } },
+        { url: 'http://zcdsphapilist.replit.app/spotify', params: { q: songTitle } },
+        { url: 'https://openapi-idk8.onrender.com/search-song', params: { song: songTitle } },
+        { url: 'https://markdevs-last-api.onrender.com/search/spotify', params: { q: songTitle } }
       ];
 
-      // Récupérer les URLs des pistes
+      // Récupérer les URLs de la chanson
       const trackURLs = await fetchTrackURLs(services);
       const trackID = trackURLs[0];
 
-      // Récupérer le lien de téléchargement
+      // Récupérer le lien de téléchargement pour le track ID sélectionné
       const downloadResponse = await axios.get(`https://sp-dl-bice.vercel.app/spotify?id=${encodeURIComponent(trackID)}`);
       const downloadLink = downloadResponse.data.download_link;
 
-      // Télécharger la chanson et envoyer en pièce jointe
-      const filePath = await downloadTrack(downloadLink);
-      await sendMessage(senderId, {
-        text: `${header}\n🎧 Playing: ${query}\n${footer}`,
-        attachment: fs.createReadStream(filePath)
-      }, pageAccessToken);
-
-      // Supprimer le fichier téléchargé après l'envoi
-      fs.unlink(filePath, (err) => {
-        if (err) console.error("Error deleting file:", err);
-        else console.log("File deleted successfully.");
-      });
+      // Télécharger et envoyer la chanson en flux
+      await sendTrackAsStream(downloadLink, senderId, songTitle, artist, sendMessage, pageAccessToken);
 
     } catch (error) {
-      console.error("Error fetching song:", error);
+      console.error("Error occurred:", error);
       await sendMessage(senderId, { text: `${header}\nAn error occurred: ${error.message}\n${footer}` }, pageAccessToken);
     }
   }
 };
 
-// Fonction pour récupérer les URLs des pistes depuis plusieurs services
+// Fonction pour extraire le titre de la chanson et l'artiste
+function getSongTitleAndArtist(args) {
+  let songTitle, artist;
+
+  const byIndex = args.indexOf("by");
+  if (byIndex !== -1 && byIndex > 0 && byIndex < args.length - 1) {
+    songTitle = args.slice(0, byIndex).join(" ");
+    artist = args.slice(byIndex + 1).join(" ");
+  } else {
+    songTitle = args.join(" ");
+  }
+
+  return { songTitle, artist };
+}
+
+// Fonction pour récupérer les URLs de la chanson
 async function fetchTrackURLs(services) {
   for (const service of services) {
     try {
       const response = await axios.get(service.url, { params: service.params });
+
       if (response.data.trackURLs && response.data.trackURLs.length > 0) {
         return response.data.trackURLs;
       }
@@ -82,21 +75,23 @@ async function fetchTrackURLs(services) {
   throw new Error("No track URLs found from any API.");
 }
 
-// Fonction pour télécharger la piste audio
-async function downloadTrack(url) {
-  const response = await axios.get(url, { responseType: 'stream' });
-  const filePath = path.join(__dirname, 'cache', `${randomString()}.mp3`);
+// Fonction pour télécharger et envoyer le fichier audio en flux
+async function sendTrackAsStream(downloadLink, senderId, songTitle, artist, sendMessage, pageAccessToken) {
+  try {
+    const response = await axios({
+      url: downloadLink,
+      method: 'GET',
+      responseType: 'arraybuffer'  // Téléchargement du fichier sous forme de données binaires
+    });
 
-  const writeStream = fs.createWriteStream(filePath);
-  response.data.pipe(writeStream);
+    // Envoyer le fichier en flux directement
+    await sendMessage(senderId, {
+      text: `🎧 Now playing: ${songTitle}${artist ? ` by ${artist}` : ''}`,
+      attachment: Buffer.from(response.data, 'binary') // Convertir les données en buffer
+    }, pageAccessToken);
 
-  return new Promise((resolve, reject) => {
-    writeStream.on('finish', () => resolve(filePath));
-    writeStream.on('error', reject);
-  });
-}
-
-// Générer une chaîne aléatoire pour nommer le fichier
-function randomString(length = 10) {
-  return Math.random().toString(36).substring(2, 2 + length);
+  } catch (error) {
+    console.error("Error downloading or sending the track:", error.message);
+    throw new Error("Error downloading or sending the track.");
+  }
 }
