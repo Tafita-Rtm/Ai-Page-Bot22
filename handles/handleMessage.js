@@ -119,7 +119,7 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
 }
 
 async function analyzeImageWithOCRSpace(imageUrl) {
-  const apiKey = 'VOTRE_CLE_API_OCR_SPACE'; // Remplacez par votre clé d'API OCR.space
+  const apiKey = 'K87729656488957'; // Remplacez par votre clé d'API OCR.space
   const ocrApiEndpoint = 'https://api.ocr.space/parse/image';
 
   try {
