@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { sendMessage } = require('./sendMessage');
-const autoImageAnalyzer = require('./autoImageAnalyzer'); // Importer l'analyseur d'image
+const autoImageAnalyzer = require('../commands/autoImageAnalyzer'); // Importer l'analyseur d'image
 
 const commands = new Map();
 
