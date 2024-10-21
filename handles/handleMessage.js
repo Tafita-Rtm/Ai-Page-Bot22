@@ -20,11 +20,11 @@ async function handleMessage(event, pageAccessToken) {
     const imageUrl = event.message.attachments[0].payload.url;
     await handleImage(senderId, imageUrl, pageAccessToken, sendMessage);
   } else if (event.message.text) {
-    const messageText = event.message.text.toLowerCase();
+    const messageText = event.message.text.trim().toLowerCase();
     const args = messageText.split(' ');
     const commandName = args.shift();
 
-    // Exécuter la commande si elle existe
+    // Si une commande est trouvée, exécute la commande
     if (commands.has(commandName)) {
       const command = commands.get(commandName);
       try {
@@ -33,24 +33,31 @@ async function handleMessage(event, pageAccessToken) {
         console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
         await sendMessage(senderId, { text: 'Erreur lors de l\'exécution de la commande.' }, pageAccessToken);
       }
+    } else {
+      // Si aucune commande n'est trouvée, GPT-4o répond par défaut
+      const gpt4oCommand = commands.get('gpt4o');
+      if (gpt4oCommand) {
+        try {
+          await gpt4oCommand.execute(senderId, [messageText], pageAccessToken, sendMessage);
+        } catch (error) {
+          console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
+          await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
+        }
+      }
     }
   }
 }
 
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
-    // Informer l'utilisateur que l'analyse de l'image est en cours
     await sendMessage(senderId, { text: '🖼️ Analyzing the image... Please wait ⏳' }, pageAccessToken);
-
-    // Analyser l'image avec OCR.Space
-    const extractedText = await analyzeImageWithOCROnline(imageUrl, 'VOTRE_API_KEY_OCR_SPACE');
+    const extractedText = await analyzeImageWithOCROnline(imageUrl, 'K87729656488957');
 
     if (!extractedText) {
       await sendMessage(senderId, { text: "Je n'ai pas pu extraire de texte de cette image." }, pageAccessToken);
       return;
     }
 
-    // Envoyer le texte extrait à GPT-4o pour analyse
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
       await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage);
