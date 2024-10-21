@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { sendMessage } = require('./sendMessage');
-const autoImageAnalyzer = require('../commands/gemini'); // Importer l'analyseur d'image
+const gemini = require('../commands/gemini'); // Importer l'analyseur d'image
 
 const commands = new Map();
 
@@ -36,7 +36,7 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
     await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image... Veuillez patienter ⏳' }, pageAccessToken);
 
     // Appel de l'analyse d'image (remplace OCR par votre analyseur)
-    await autoImageAnalyzer.execute(senderId, [{ type: 'photo', url: imageUrl }], pageAccessToken, sendMessage);
+    await gemini.execute(senderId, [{ type: 'photo', url: imageUrl }], pageAccessToken, sendMessage);
 
   } catch (error) {
     console.error('Erreur lors de l\'analyse de l\'image :', error);
