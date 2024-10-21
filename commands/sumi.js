@@ -1,87 +1,118 @@
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
+// Export de la commande avec les propriétés demandées
 module.exports = {
-  name: 'rtmai',
-  description: 'Gpt4 AI with multiple conversation handling',
-  author: 'Dipto',
+  name: 'pinterest',
+  description: 'Search for images on Pinterest based on a query.',
+  author: 'coffee',
+
+  // Fonction principale pour exécuter la commande
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const query = args.join(' ').toLowerCase();
-
-    if (!query) {
-      return sendMessage(senderId, { text: "Please provide a question to answer.\n\nExample:\n!gpt4 hey" }, pageAccessToken);
+    if (args.length === 0) {
+      return sendMessage(senderId, { text: '📷 | Please follow this format:\n-pinterest cat -5' }, pageAccessToken);
     }
 
-    try {
-      // Envoyer un message indiquant que l'IA réfléchit
-      const thinkingMessage = await sendMessage(senderId, { text: '🤖 Gpt4 is thinking... 🤔' }, pageAccessToken);
+    let imageCount = 1;
+    const query = args.slice(0, -1).join(' ');
 
-      // Appel de la fonction pour obtenir la réponse
-      const answer = await getAnswerFromGPT4(query, senderId);
-
-      // Envoyer la réponse formatée
-      const formattedResponse = `🤖 Gpt4 Response\n━━━━━━━━━━━━━━━━\n${answer}\n━━━━━━━━━━━━━━━━`;
-      await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-
-      // Supprimer le message d'attente
-      await thinkingMessage.delete();
-
-    } catch (error) {
-      console.error('Error while fetching AI response:', error);
-      // Message de réponse en cas d'erreur
-      await sendMessage(senderId, { text: `Error: ${error.message}` }, pageAccessToken);
-    }
-  }
-};
-
-// Fonction pour obtenir l'URL de base de l'API
-async function getBaseUrl() {
-  try {
-    const base = await axios.get('https://raw.githubusercontent.com/Blankid018/D1PT0/main/baseApiUrl.json');
-    return base.data.api;
-  } catch (error) {
-    console.error('Failed to fetch base API URL:', error.message);
-    throw new Error('Failed to fetch base API URL');
-  }
-}
-
-// Fonction pour obtenir une réponse de GPT-4
-async function getAnswerFromGPT4(query, senderID) {
-  const baseUrl = await getBaseUrl();
-  try {
-    const response = await axios.get(`${baseUrl}/gpt4?text=${encodeURIComponent(query)}&senderID=${senderID}`);
-    return response.data.data;
-  } catch (error) {
-    console.error(`Failed to fetch GPT-4 answer: ${error.message}`);
-    throw new Error(`Failed to fetch GPT-4 answer: ${error.message}`);
-  }
-}
-
-// Fonction pour gérer une réponse au message
-module.exports.onReply = async function ({ message, event, Reply }) {
-  const { author, type } = Reply;
-
-  if (author !== event.from.id) return;
-
-  if (type === 'reply') {
-    const reply = event.text?.toLowerCase();
-    if (isNaN(reply)) {
-      try {
-        const baseUrl = await getBaseUrl();
-        const response = await axios.get(`${baseUrl}/gpt4?text=${encodeURIComponent(reply)}&senderID=${author}`);
-        const replyText = response.data.data;
-        const info = await message.reply(replyText);
-
-        global.functions.onReply.set(info.message_id, {
-          commandName: this.config.name,
-          type: 'reply',
-          messageID: info.message_id,
-          author,
-          link: replyText,
-        });
-      } catch (err) {
-        console.error(`Error while fetching GPT-4 reply: ${err.message}`);
-        message.reply(`Error: ${err.message}`);
+    const countArg = args[args.length - 1];
+    if (countArg.startsWith('-')) {
+      imageCount = parseInt(countArg.slice(1), 10);
+      if (isNaN(imageCount) || imageCount < 1) {
+        imageCount = 1;
+      } else if (imageCount > 12) {
+        imageCount = 12;
       }
     }
+
+    const allImages = [];
+    let fetchedImagesCount = 0;
+
+    try {
+      // Envoyer un message indiquant que les images sont en cours de recherche
+      await sendMessage(senderId, { text: '🔍 *Searching for images on Pinterest* ⏳...\n\n─────★─────' }, pageAccessToken);
+
+      while (fetchedImagesCount < imageCount) {
+        const remaining = imageCount - fetchedImagesCount;
+        const fetchLimit = Math.min(6, remaining);
+
+        const images1 = await searchPinterest(query);
+        if (images1.result) {
+          allImages.push(...images1.result.slice(0, fetchLimit));
+          fetchedImagesCount += images1.result.length;
+        }
+
+        if (fetchedImagesCount < imageCount) {
+          const images2 = await searchPinterest(`${query} 1`);
+          if (images2.result) {
+            allImages.push(...images2.result.slice(0, fetchLimit));
+            fetchedImagesCount += images2.result.length;
+          }
+        }
+
+        if (fetchedImagesCount >= imageCount) break;
+      }
+
+      const finalImages = allImages.slice(0, imageCount);
+
+      if (finalImages.length > 0) {
+        const filePaths = await downloadImages(finalImages);
+        await sendMessage(senderId, {
+          body: `Here are the top ${finalImages.length} images for "${query}".`,
+          attachment: filePaths.map((filePath) => fs.createReadStream(filePath)),
+        }, pageAccessToken);
+
+        cleanupFiles(filePaths);
+      } else {
+        await sendMessage(senderId, { text: `I couldn't find any images for "${query}".` }, pageAccessToken);
+      }
+
+    } catch (error) {
+      console.error('Error accessing Pinterest or downloading images:', error);
+      await sendMessage(senderId, { text: 'There was an error accessing Pinterest or downloading the images. Please try again later.' }, pageAccessToken);
+    }
   }
 };
+
+// Fonction pour rechercher des images sur Pinterest
+async function searchPinterest(query) {
+  const apiUrl = `https://example.com/api/searchPinterest?q=${encodeURIComponent(query)}`;
+  const response = await axios.get(apiUrl);
+  return response.data;
+}
+
+// Fonction pour télécharger les images
+async function downloadImages(imageUrls) {
+  const filePaths = [];
+  const cachePath = './plugins/commands/cache';
+
+  for (let i = 0; i < imageUrls.length; i++) {
+    const url = imageUrls[i];
+    const filePath = path.join(cachePath, `image${i}.jpg`);
+    const writer = fs.createWriteStream(filePath);
+
+    const response = await axios({
+      url,
+      method: 'GET',
+      responseType: 'stream',
+    });
+
+    response.data.pipe(writer);
+
+    await new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+
+    filePaths.push(filePath);
+  }
+
+  return filePaths;
+}
+
+// Fonction pour nettoyer les fichiers temporaires
+function cleanupFiles(filePaths) {
+  filePaths.forEach((filePath) => fs.unlinkSync(filePath));
+}
