@@ -13,7 +13,7 @@ module.exports = {
 
     try {
       // Envoyer un message indiquant que l'IA réfléchit
-      const thinkingMessage = await sendMessage(senderId, { text: '🪐 GPT-4 réfléchit... ⏳' }, pageAccessToken);
+      const thinkingMessage = await sendMessage(senderId, { text: '🪐 🪔Rtm GPT-4 réfléchit... ⏳' }, pageAccessToken);
 
       // Appel de l'API pour obtenir la réponse de GPT-4
       const fastestAnswer = await getFastestValidAnswer(query, senderId);
