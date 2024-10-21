@@ -20,13 +20,16 @@ async function handleMessage(event, pageAccessToken) {
 
     // Si une image est envoyée, GPT-4o est utilisé pour l'analyser
     const gpt4oCommand = commands.get('gpt4o'); // Assurez-vous que gpt4o est bien défini
-    if (gpt4oCommand) {
+    if (gpt4oCommand && typeof gpt4oCommand.handleImage === 'function') {
       try {
+        // Analyser l'image avec GPT-4o
         await gpt4oCommand.handleImage(senderId, imageUrl, 'Décris cette image.', sendMessage, pageAccessToken);
       } catch (error) {
         console.error('Erreur lors de l\'analyse de l\'image avec GPT-4o:', error);
         await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
       }
+    } else {
+      await sendMessage(senderId, { text: 'La fonctionnalité d\'analyse d\'image est indisponible pour le moment.' }, pageAccessToken);
     }
   } else if (event.message.text) {
     const messageText = event.message.text.toLowerCase();
