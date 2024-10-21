@@ -1,118 +1,33 @@
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
-// Export de la commande avec les propriétés demandées
 module.exports = {
-  name: 'pinterest',
-  description: 'Search for images on Pinterest based on a query.',
-  author: 'coffee',
-
-  // Fonction principale pour exécuter la commande
+  name: 'gpt4o',
+  description: 'Generate text using GPT-4o API',
+  author: 'Carl John Villavito',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    if (args.length === 0) {
-      return sendMessage(senderId, { text: '📷 | Please follow this format:\n-pinterest cat -5' }, pageAccessToken);
+    const prompt = args.join(' ');
+
+    if (prompt === "") {
+      sendMessage(senderId, { text: "Usage: /gpt4o <question>" }, pageAccessToken);
+      return; // Ensure the function doesn't continue
     }
 
-    let imageCount = 1;
-    const query = args.slice(0, -1).join(' ');
-
-    const countArg = args[args.length - 1];
-    if (countArg.startsWith('-')) {
-      imageCount = parseInt(countArg.slice(1), 10);
-      if (isNaN(imageCount) || imageCount < 1) {
-        imageCount = 1;
-      } else if (imageCount > 12) {
-        imageCount = 12;
-      }
-    }
-
-    const allImages = [];
-    let fetchedImagesCount = 0;
+    // Inform the user that content is being generated
+    sendMessage(senderId, { text: 'Generating content... Please wait.' }, pageAccessToken);
 
     try {
-      // Envoyer un message indiquant que les images sont en cours de recherche
-      await sendMessage(senderId, { text: '🔍 *Searching for images on Pinterest* ⏳...\n\n─────★─────' }, pageAccessToken);
+      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=${senderId}`;
+      const response = await axios.get(apiUrl);
 
-      while (fetchedImagesCount < imageCount) {
-        const remaining = imageCount - fetchedImagesCount;
-        const fetchLimit = Math.min(6, remaining);
+      // Extract the result from the response
+      const result = response.data.result;
 
-        const images1 = await searchPinterest(query);
-        if (images1.result) {
-          allImages.push(...images1.result.slice(0, fetchLimit));
-          fetchedImagesCount += images1.result.length;
-        }
-
-        if (fetchedImagesCount < imageCount) {
-          const images2 = await searchPinterest(`${query} 1`);
-          if (images2.result) {
-            allImages.push(...images2.result.slice(0, fetchLimit));
-            fetchedImagesCount += images2.result.length;
-          }
-        }
-
-        if (fetchedImagesCount >= imageCount) break;
-      }
-
-      const finalImages = allImages.slice(0, imageCount);
-
-      if (finalImages.length > 0) {
-        const filePaths = await downloadImages(finalImages);
-        await sendMessage(senderId, {
-          body: `Here are the top ${finalImages.length} images for "${query}".`,
-          attachment: filePaths.map((filePath) => fs.createReadStream(filePath)),
-        }, pageAccessToken);
-
-        cleanupFiles(filePaths);
-      } else {
-        await sendMessage(senderId, { text: `I couldn't find any images for "${query}".` }, pageAccessToken);
-      }
+      // Send the generated text to the user with proper concatenation
+      sendMessage(senderId, { text: "GPT4o BY CHATGPT:\n\n" + result }, pageAccessToken);
 
     } catch (error) {
-      console.error('Error accessing Pinterest or downloading images:', error);
-      await sendMessage(senderId, { text: 'There was an error accessing Pinterest or downloading the images. Please try again later.' }, pageAccessToken);
+      console.error('Error calling GPT-4o API:', error);
+      sendMessage(senderId, { text: 'There was an error generating the content. Please try again later.' }, pageAccessToken);
     }
   }
 };
-
-// Fonction pour rechercher des images sur Pinterest
-async function searchPinterest(query) {
-  const apiUrl = `https://example.com/api/searchPinterest?q=${encodeURIComponent(query)}`;
-  const response = await axios.get(apiUrl);
-  return response.data;
-}
-
-// Fonction pour télécharger les images
-async function downloadImages(imageUrls) {
-  const filePaths = [];
-  const cachePath = './plugins/commands/cache';
-
-  for (let i = 0; i < imageUrls.length; i++) {
-    const url = imageUrls[i];
-    const filePath = path.join(cachePath, `image${i}.jpg`);
-    const writer = fs.createWriteStream(filePath);
-
-    const response = await axios({
-      url,
-      method: 'GET',
-      responseType: 'stream',
-    });
-
-    response.data.pipe(writer);
-
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
-
-    filePaths.push(filePath);
-  }
-
-  return filePaths;
-}
-
-// Fonction pour nettoyer les fichiers temporaires
-function cleanupFiles(filePaths) {
-  filePaths.forEach((filePath) => fs.unlinkSync(filePath));
-}
