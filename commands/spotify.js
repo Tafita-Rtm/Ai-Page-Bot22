@@ -1,73 +1,36 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gptv1',
-  description: 'Pose une question à GPT-v1 via l\'API Kenlie Jugarap',
-  author: 'Deku (rest api)',
+  name: 'gpt',
+  description: 'Ask a question to GPT-4',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
+    const query = args.join(' ');
 
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
+    if (!query) {
+      return sendMessage(senderId, { text: "🗨️✨ | 𝙲𝚑𝚊𝚝𝙶𝙿𝚃\n━━━━━━━━━━━━━━━━\nHello! How can I assist you today?\n━━━━━━━━━━━━━━━━" }, pageAccessToken);
     }
 
     try {
-      // Envoyer un message indiquant que GPT-v1 est en train de répondre
-      await sendMessage(senderId, { text: '💬 *GPT-v1 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+      // Indiquer que GPT-4 est en train de répondre
+      await sendMessage(senderId, { text: '💬 *GPT-4 is typing* ⏳...\n\n─────★─────' }, pageAccessToken);
 
-      // URL pour appeler l'API GPT-v1
-      const apiUrl = `https://api.kenliejugarap.com/freegptv1/?question=${encodeURIComponent(prompt)}`;
-      const response = await axios.get(apiUrl, {
-        headers: {
-          'Referer': 'https://api.kenliejugarap.com/',
-          'Referrer-Policy': 'strict-origin-when-cross-origin',
-          'accept': 'text/event-stream',
-          'accept-language': 'en-US,en;q=0.9',
-          'content-type': 'application/json',
-          'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120"',
-          'sec-ch-ua-mobile': '?1',
-          'sec-ch-ua-platform': '"Android"',
-          'sec-fetch-dest': 'empty',
-          'sec-fetch-mode': 'cors',
-          'sec-fetch-site': 'same-origin'
-        }
-      });
+      // Envoyer la requête à l'API GPT-4
+      const apiUrl = `https://deku-rest-apis.ooguy.com/gpt4?prompt=${encodeURIComponent(query)}&uid=${senderId}`;
+      const response = await axios.get(apiUrl);
 
-      const text = response.data.response;
+      const gptResponse = response.data.gpt4;
 
-      // Nettoyer le texte pour enlever tout lien indésirable
-      const unwantedTextPattern = /\n\n.*(https:\/\/click2donate\.kenliejugarap\.com.*)/s;
-      const cleanedText = text.replace(unwantedTextPattern, '');
+      // Vérifier et envoyer la réponse de GPT-4
+      if (gptResponse) {
+        const formattedResponse = `─────★─────\n✨GPT-4 Response\n\n${gptResponse}\n─────★─────`;
 
-      // Créer un style avec un contour pour la réponse de GPT-v1
-      const formattedResponse = `─────★─────\n` +
-                                `✨GPT-v1🤖\n\n${cleanedText}\n` +
-                                `─────★─────`;
-
-      // Gérer les réponses longues de plus de 2000 caractères
-      const maxMessageLength = 2000;
-      if (formattedResponse.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
-        for (const message of messages) {
-          await sendMessage(senderId, { text: message }, pageAccessToken);
-        }
-      } else {
         await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      } else {
+        await sendMessage(senderId, { text: "Error: Unexpected response format from API." }, pageAccessToken);
       }
-
     } catch (error) {
-      console.error('Error calling GPT-v1 API:', error);
-      // Message de réponse d'erreur
-      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
+      console.error('API call failed: ', error);
+      await sendMessage(senderId, { text: 'Sorry, an error occurred. Please try again later.' }, pageAccessToken);
     }
   }
 };
-
-// Fonction pour découper les messages en morceaux de 2000 caractères
-function splitMessageIntoChunks(message, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < message.length; i += chunkSize) {
-    chunks.push(message.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
