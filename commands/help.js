@@ -31,8 +31,8 @@ module.exports = {
           }
 
           return `
-│  ${command.name.toUpperCase().padEnd(20, ' ')} │
-│  Description : ${command.description}
+🫣⚩  ${command.name.toUpperCase().padEnd(20, ' ')} ✬
+│⇨  Description : ${command.description}
 `;
         } catch (err) {
           console.error(`Erreur lors du chargement de la commande ${file}:`, err);
@@ -42,13 +42,13 @@ module.exports = {
 
       const totalCommands = commandFiles.length;
       const helpMessage = `
-╭─────────────╮
-│ 🇲🇬 Commandes Disponibles 📜 │
-├─────────────┤
-${commands.join('├─────────┤\n')}
+╭──────✯──────╮
+│🇲🇬 Commandes Disponibles 📜 
+├───────♨──────
+${commands.join('─────★─────\n')}
 │ 📌 Nombre total de commandes : ${totalCommands}  │
 │ 💡 Utilisez le nom de la commande pour plus de détails ! │
-╰──────────╯`;
+╰──────✨──────╯`;
 
       sendMessage(senderId, { text: helpMessage }, pageAccessToken);
     } catch (error) {
