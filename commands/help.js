@@ -8,14 +8,14 @@ module.exports = {
   execute(senderId, args, pageAccessToken, sendMessage) {
     try {
       const commandsDir = path.join(__dirname, '../commands');
-      
+
       // Vérifie si le répertoire existe avant de lire son contenu
       if (!fs.existsSync(commandsDir)) {
         return sendMessage(senderId, { text: 'Le répertoire des commandes n\'existe pas.' }, pageAccessToken);
       }
-      
+
       const commandFiles = fs.readdirSync(commandsDir).filter(file => file.endsWith('.js'));
-      
+
       // Vérifie s'il y a des fichiers dans le répertoire
       if (commandFiles.length === 0) {
         return sendMessage(senderId, { text: 'Aucune commande disponible.' }, pageAccessToken);
@@ -31,9 +31,9 @@ module.exports = {
           }
 
           return `
-╭─────╮
-  ${command.name.toUpperCase()}
-╰─────╯
+╭─────┬─────────────╮
+│ ${command.name.toUpperCase().padEnd(10, ' ')} │
+╰─────┴─────────────╯
 Description : ${command.description}
 `;
         } catch (err) {
@@ -48,7 +48,7 @@ Description : ${command.description}
 🇲🇬Commandes Disponibles📜
 ╰─────★─────╯
 
-${commands.join('─────🪐────\n\n')}
+${commands.join('─────🪐────\n')}
 
 📌  Nombre total de commandes : ${totalCommands}
 💡  Utilisez le nom de la commande pour plus de détails !`;
