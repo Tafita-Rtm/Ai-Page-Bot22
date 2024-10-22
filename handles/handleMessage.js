@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { sendMessage } = require('./sendMessage');
-const { handleImage } = require('./gpt4o'); // Importer la fonction handleImage depuis gpt4o
+const { handleImage } = require('../commands/gpt4o'); // On utilise la fonction handleImage de gpt4o
 
 const commands = new Map();
 
@@ -22,26 +22,25 @@ async function handleMessage(event, pageAccessToken) {
   // Vérifier si le message contient une image
   if (event.message.attachments && event.message.attachments[0].type === 'image') {
     const imageUrl = event.message.attachments[0].payload.url;
-    await handleImageAnalysis(senderId, imageUrl, pageAccessToken, sendMessage); // Utiliser la nouvelle fonction d'analyse d'image
+    await handleImageWithGPT4o(senderId, imageUrl, pageAccessToken, sendMessage);
   } else if (event.message.text) {
     const messageText = event.message.text.trim();
     await handleText(senderId, messageText, pageAccessToken, sendMessage);
   }
 }
 
-// Remplacer l'analyse d'image par celle de GPT-4o
-async function handleImageAnalysis(senderId, imageUrl, pageAccessToken, sendMessage) {
+// Gestion des images avec la logique de GPT-4o
+async function handleImageWithGPT4o(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
     // Envoyer un message pour informer que l'image est en cours d'analyse
     await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image avec GPT-4o... Veuillez patienter ⏳' }, pageAccessToken);
 
-    // Analyser l'image en utilisant GPT-4o (via handleImage de gpt4o)
     const query = "Décris cette image.";
-    await handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken); // Appel de l'API gpt4o pour traiter l'image
+    await handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken); // On utilise la fonction de gpt4o.js pour gérer l'image
 
   } catch (error) {
     console.error('Erreur lors de l\'analyse de l\'image avec GPT-4o :', error);
-    await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
+    await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image avec GPT-4o.' }, pageAccessToken);
   }
 }
 
