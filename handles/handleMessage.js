@@ -31,10 +31,7 @@ async function handleMessage(event, pageAccessToken) {
 // Gestion des images avec interaction
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
-    // Envoyer un message pour informer que l'image est en cours d'analyse
     await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image... Veuillez patienter ⏳' }, pageAccessToken);
-
-    // Analyser l'image avec OCR.space
     const extractedText = await analyzeImageWithOCRSpace(imageUrl);
 
     if (!extractedText) {
@@ -42,47 +39,44 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
       return;
     }
 
-    // Sauvegarder le texte extrait dans l'état de l'utilisateur
     userStates.set(senderId, { extractedText });
-
-    // Envoyer le texte extrait directement à GPT-4o
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
-      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage); // GPT-4o traite le texte extrait
+      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage);
     }
-
   } catch (error) {
     console.error('Erreur lors de l\'analyse de l\'image avec OCR.space :', error);
     await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
   }
 }
 
-// Gestion des textes envoyés
+// Gestion des textes envoyés et ajout des boutons flottants
 async function handleText(senderId, text, pageAccessToken, sendMessage) {
-  const args = text.split(' '); // Diviser le texte en arguments
-  const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
-
+  const args = text.split(' ');
+  const commandName = args.shift().toLowerCase();
   const command = commands.get(commandName);
-  const userState = userStates.get(senderId); // Récupérer l'état de l'utilisateur (texte extrait)
+  const userState = userStates.get(senderId);
 
   if (command) {
-    // Si une commande est trouvée, l'exécuter
     try {
-      await command.execute(senderId, args, pageAccessToken, sendMessage); // Exécuter la commande avec les arguments
+      await command.execute(senderId, args, pageAccessToken, sendMessage);
+      // Ajouter des boutons pour interagir avec la commande
+      await sendButtonsForCommand(senderId, commandName, pageAccessToken, sendMessage);
     } catch (error) {
       console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
       await sendMessage(senderId, { text: `Erreur lors de l'exécution de la commande ${commandName}.` }, pageAccessToken);
     }
   } else {
-    // Si aucune commande n'est trouvée, envoyer la question directement à GPT-4o
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
       try {
-        // Ajouter le texte extrait au message si disponible
         const contextText = userState ? userState.extractedText : '';
         const fullMessage = contextText ? `${contextText}\n\n${text}` : text;
 
-        await gpt4oCommand.execute(senderId, [fullMessage], pageAccessToken, sendMessage); // Envoyer le texte avec le contexte extrait à GPT-4o
+        await gpt4oCommand.execute(senderId, [fullMessage], pageAccessToken, sendMessage);
+
+        // Envoyer le bouton stop après chaque réponse de GPT-4o
+        await sendStopButton(senderId, pageAccessToken, sendMessage);
       } catch (error) {
         console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
         await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
@@ -93,6 +87,56 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
   }
 }
 
+// Fonction pour envoyer des boutons flottants pour chaque commande
+async function sendButtonsForCommand(senderId, commandName, pageAccessToken, sendMessage) {
+  const buttons = [
+    {
+      type: 'postback',
+      title: `Discuter avec ${commandName}`,
+      payload: commandName
+    },
+    {
+      type: 'postback',
+      title: 'Stop',
+      payload: 'stop'
+    }
+  ];
+
+  await sendMessage(senderId, {
+    attachment: {
+      type: 'template',
+      payload: {
+        template_type: 'button',
+        text: `Vous avez utilisé la commande ${commandName}. Voulez-vous continuer ou arrêter ?`,
+        buttons: buttons
+      }
+    }
+  }, pageAccessToken);
+}
+
+// Fonction pour envoyer le bouton "Stop"
+async function sendStopButton(senderId, pageAccessToken, sendMessage) {
+  const stopButton = [
+    {
+      type: 'postback',
+      title: 'Stop',
+      payload: 'stop'
+    }
+  ];
+
+  await sendMessage(senderId, {
+    attachment: {
+      type: 'template',
+      payload: {
+        template_type: 'button',
+        text: 'Voulez-vous arrêter la discussion ?',
+        buttons: stopButton
+      }
+    }
+  }, pageAccessToken);
+}
+
+// Fonction pour analyser une image avec OCR.space
 async function analyzeImageWithOCRSpace(imageUrl) {
   const apiKey = 'K87729656488957'; // Remplacez par votre clé d'API OCR.space
   const ocrApiEndpoint = 'https://api.ocr.space/parse/image';
@@ -101,7 +145,7 @@ async function analyzeImageWithOCRSpace(imageUrl) {
     const formData = new URLSearchParams();
     formData.append('apikey', apiKey);
     formData.append('url', imageUrl);
-    formData.append('language', 'eng'); // ou 'fre' pour le français
+    formData.append('language', 'eng');
 
     const response = await axios.post(ocrApiEndpoint, formData);
 
@@ -109,7 +153,6 @@ async function analyzeImageWithOCRSpace(imageUrl) {
       throw new Error(response.data.ErrorMessage[0]);
     }
 
-    // Extraire le texte détecté
     const parsedResults = response.data.ParsedResults;
     if (parsedResults && parsedResults.length > 0) {
       return parsedResults[0].ParsedText.trim();
