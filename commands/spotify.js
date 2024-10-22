@@ -1,7 +1,7 @@
 const { callGeminiAPI } = require('../utils/callGeminiAPI');
 
 module.exports = {
-  name: 'g',
+  name: 'gpt4o',
   description: '📩 Utiliser le comande G pour utiliser Gemini',
   author: 'ChatGPT',
   async execute(senderId, args, pageAccessToken, sendMessage) {
@@ -10,7 +10,7 @@ module.exports = {
     try {
       // Message pour indiquer que Gemini est en train de répondre
       const waitingMessage = {
-        text: '💬 *Gemini est en train de te répondre* ⏳...\n\n─────★─────'
+        text: '💬 Gemini est en train de te répondre⏳...\n\n─────★─────'
       };
       await sendMessage(senderId, waitingMessage, pageAccessToken);
 
