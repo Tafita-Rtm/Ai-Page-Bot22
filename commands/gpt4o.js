@@ -1,60 +1,87 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'c',
-  description: 'Pose une question à GPT-4',
-  author: 'Deku (rest api)',
+  name: 'rtmai',
+  description: 'Gpt4 AI with multiple conversation handling',
+  author: 'Dipto',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
+    const query = args.join(' ').toLowerCase();
 
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
+    if (!query) {
+      return sendMessage(senderId, { text: "Please provide a question to answer.\n\nExample:\n!gpt4 hey" }, pageAccessToken);
     }
 
     try {
-      // Envoyer un message indiquant que GPT-4 est en train de répondre
-      await sendMessage(senderId, { text: '💬 *GPT-4 est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+      // Envoyer un message indiquant que l'IA réfléchit
+      const thinkingMessage = await sendMessage(senderId, { text: '🤖 Gpt4 is thinking... 🤔' }, pageAccessToken);
 
-      // Appeler l'API GPT-4 via l'URL de la 2e version
-      const response = await axios.post('https://free-ai-models.vercel.app/v1/chat/completions', {
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: 'You are AI(gpt4-o)' },
-          { role: 'user', content: prompt }
-        ]
-      });
+      // Appel de la fonction pour obtenir la réponse
+      const answer = await getAnswerFromGPT4(query, senderId);
 
-      const text = response.data.response;
+      // Envoyer la réponse formatée
+      const formattedResponse = `🤖 Gpt4 Response\n━━━━━━━━━━━━━━━━\n${answer}\n━━━━━━━━━━━━━━━━`;
+      await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
 
-      // Créer un style avec un contour pour la réponse de GPT-4
-      const formattedResponse = `─────★─────\n` +
-                                `✨GPT-4o mini🤖🇲🇬\n\n${text}\n` +
-                                `─────★─────`;
-
-      // Gérer les réponses longues de plus de 2000 caractères
-      const maxMessageLength = 2000;
-      if (formattedResponse.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
-        for (const message of messages) {
-          await sendMessage(senderId, { text: message }, pageAccessToken);
-        }
-      } else {
-        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-      }
+      // Supprimer le message d'attente
+      await thinkingMessage.delete();
 
     } catch (error) {
-      console.error('Error calling GPT-4 API:', error);
-      // Message de réponse d'erreur
-      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
+      console.error('Error while fetching AI response:', error);
+      // Message de réponse en cas d'erreur
+      await sendMessage(senderId, { text: `Error: ${error.message}` }, pageAccessToken);
     }
   }
 };
 
-// Fonction pour découper les messages en morceaux de 2000 caractères
-function splitMessageIntoChunks(message, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < message.length; i += chunkSize) {
-    chunks.push(message.slice(i, i + chunkSize));
+// Fonction pour obtenir l'URL de base de l'API
+async function getBaseUrl() {
+  try {
+    const base = await axios.get('https://free-ai-models.vercel.app/v1/chat/completions');
+    return base.data.api;
+  } catch (error) {
+    console.error('Failed to fetch base API URL:', error.message);
+    throw new Error('Failed to fetch base API URL');
   }
-  return chunks;
 }
+
+// Fonction pour obtenir une réponse de GPT-4
+async function getAnswerFromGPT4(query, senderID) {
+  const baseUrl = await getBaseUrl();
+  try {
+    const response = await axios.get(`${baseUrl}/gpt4?text=${encodeURIComponent(query)}&senderID=${senderID}`);
+    return response.data.data;
+  } catch (error) {
+    console.error(`Failed to fetch GPT-4 answer: ${error.message}`);
+    throw new Error(`Failed to fetch GPT-4 answer: ${error.message}`);
+  }
+}
+
+// Fonction pour gérer une réponse au message
+module.exports.onReply = async function ({ message, event, Reply }) {
+  const { author, type } = Reply;
+
+  if (author !== event.from.id) return;
+
+  if (type === 'reply') {
+    const reply = event.text?.toLowerCase();
+    if (isNaN(reply)) {
+      try {
+        const baseUrl = await getBaseUrl();
+        const response = await axios.get(`${baseUrl}/gpt4?text=${encodeURIComponent(reply)}&senderID=${author}`);
+        const replyText = response.data.data;
+        const info = await message.reply(replyText);
+
+        global.functions.onReply.set(info.message_id, {
+          commandName: this.config.name,
+          type: 'reply',
+          messageID: info.message_id,
+          author,
+          link: replyText,
+        });
+      } catch (err) {
+        console.error(`Error while fetching GPT-4 reply: ${err.message}`);
+        message.reply(`Error: ${err.message}`);
+      }
+    }
+  }
+};
