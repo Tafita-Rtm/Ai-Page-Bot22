@@ -1,87 +1,83 @@
 const axios = require('axios');
+const path = require('path');
 
 module.exports = {
-  name: 'rtmai',
-  description: 'Gpt4 AI with multiple conversation handling',
-  author: 'Dipto',
+  name: 'gpt4ortm',
+  description: 'Pose une question à GPT-4o websrapers(afaka mamaly ny zavatra mitranga ankehitriny).',
+  author: 'Deku (rest api)',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const query = args.join(' ').toLowerCase();
+    const prompt = args.join(' ');
 
-    if (!query) {
-      return sendMessage(senderId, { text: "Please provide a question to answer.\n\nExample:\n!gpt4 hey" }, pageAccessToken);
+    if (!prompt) {
+      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
     }
 
     try {
-      // Envoyer un message indiquant que l'IA réfléchit
-      const thinkingMessage = await sendMessage(senderId, { text: '🤖 Gpt4 is thinking... 🤔' }, pageAccessToken);
+      // Envoyer un message indiquant que GPT-4 est en train de répondre
+      await sendMessage(senderId, { text: 'GPT-4o websearche en cours⏳...\n\n─────★─────' }, pageAccessToken);
 
-      // Appel de la fonction pour obtenir la réponse
-      const answer = await getAnswerFromGPT4(query, senderId);
+      // Si le message auquel on répond contient une image
+      if (args.length === 0) {
+        const repliedMessage = await fetchRepliedMessage(senderId, pageAccessToken); // Fonction simulée pour obtenir le message répondu
+        if (repliedMessage && repliedMessage.attachments && repliedMessage.attachments[0].type === 'image') {
+          const imageUrl = repliedMessage.attachments[0].url;
+          const query = "Décris cette image.";
+          await handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken);
+          return;
+        }
+      }
 
-      // Envoyer la réponse formatée
-      const formattedResponse = `🤖 Gpt4 Response\n━━━━━━━━━━━━━━━━\n${answer}\n━━━━━━━━━━━━━━━━`;
-      await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      // URL pour appeler l'API GPT-4o avec une question
+      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
+      const response = await axios.get(apiUrl);
 
-      // Supprimer le message d'attente
-      await thinkingMessage.delete();
+      const text = response.data.result;
+
+      // Créer un style avec un contour pour la réponse de GPT-4
+      const formattedResponse = `─────★─────\n` +
+                                `✨GPT-4o web scrapers🤖🇲🇬\n\n${text}\n` +
+                                `─────★─────`;
+
+      // Gérer les réponses longues de plus de 2000 caractères
+      const maxMessageLength = 2000;
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+        for (const message of messages) {
+          await sendMessage(senderId, { text: message }, pageAccessToken);
+        }
+      } else {
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      }
 
     } catch (error) {
-      console.error('Error while fetching AI response:', error);
-      // Message de réponse en cas d'erreur
-      await sendMessage(senderId, { text: `Error: ${error.message}` }, pageAccessToken);
+      console.error('Error calling GPT-4 API:', error);
+      // Message de réponse d'erreur
+      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
 };
 
-// Fonction pour obtenir l'URL de base de l'API
-async function getBaseUrl() {
+// Fonction pour gérer les images
+async function handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken) {
   try {
-    const base = await axios.get('https://free-ai-models.vercel.app/v1/chat/completions');
-    return base.data.api;
+    const apiUrl = `https://deku-rest-apis.ooguy.com/gemini?prompt=${encodeURIComponent(query)}&url=${encodeURIComponent(imageUrl)}`;
+    const { data } = await axios.get(apiUrl);
+    const formattedResponse = `─────★─────\n` +
+                              `✨GPT-4o🤖🇲🇬\n\n${data.gemini}\n` +
+                              `─────★─────`;
+
+    await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
   } catch (error) {
-    console.error('Failed to fetch base API URL:', error.message);
-    throw new Error('Failed to fetch base API URL');
+    console.error('Error handling image:', error);
+    await sendMessage(senderId, { text: "Désolé, je n'ai pas pu analyser l'image." }, pageAccessToken);
   }
 }
 
-// Fonction pour obtenir une réponse de GPT-4
-async function getAnswerFromGPT4(query, senderID) {
-  const baseUrl = await getBaseUrl();
-  try {
-    const response = await axios.get(`${baseUrl}/gpt4?text=${encodeURIComponent(query)}&senderID=${senderID}`);
-    return response.data.data;
-  } catch (error) {
-    console.error(`Failed to fetch GPT-4 answer: ${error.message}`);
-    throw new Error(`Failed to fetch GPT-4 answer: ${error.message}`);
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
   }
+  return chunks;
 }
-
-// Fonction pour gérer une réponse au message
-module.exports.onReply = async function ({ message, event, Reply }) {
-  const { author, type } = Reply;
-
-  if (author !== event.from.id) return;
-
-  if (type === 'reply') {
-    const reply = event.text?.toLowerCase();
-    if (isNaN(reply)) {
-      try {
-        const baseUrl = await getBaseUrl();
-        const response = await axios.get(`${baseUrl}/gpt4?text=${encodeURIComponent(reply)}&senderID=${author}`);
-        const replyText = response.data.data;
-        const info = await message.reply(replyText);
-
-        global.functions.onReply.set(info.message_id, {
-          commandName: this.config.name,
-          type: 'reply',
-          messageID: info.message_id,
-          author,
-          link: replyText,
-        });
-      } catch (err) {
-        console.error(`Error while fetching GPT-4 reply: ${err.message}`);
-        message.reply(`Error: ${err.message}`);
-      }
-    }
-  }
-};
