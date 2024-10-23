@@ -1,10 +1,11 @@
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const { sendMessage } = require('./sendMessage');
-const gpt4o = require('../commands/gpt4o');
+
+const commands = new Map();
 
 // Charger dynamiquement les fichiers de commande
-const commands = new Map();
 const commandFiles = fs.readdirSync(path.join(__dirname, '../commands')).filter(file => file.endsWith('.js'));
 for (const file of commandFiles) {
   const command = require(`../commands/${file}`);
@@ -20,21 +21,43 @@ async function handleMessage(event, pageAccessToken) {
   // Vérifier si le message contient une image
   if (event.message.attachments && event.message.attachments[0].type === 'image') {
     const imageUrl = event.message.attachments[0].payload.url;
-    
-    // Appeler la fonction de gestion des images de gpt4o
-    await gpt4o.handleImage(senderId, imageUrl, sendMessage, pageAccessToken);
-  } 
-  // Sinon, traiter le texte envoyé par l'utilisateur
-  else if (event.message.text) {
+    await handleImage(senderId, imageUrl, pageAccessToken, sendMessage);
+  } else if (event.message.text) {
     const messageText = event.message.text.trim();
-    const args = messageText.split(' ');
-
-    // Appeler la fonction de gestion des textes de gpt4o
-    await gpt4o.execute(senderId, args, pageAccessToken, sendMessage);
+    await handleText(senderId, messageText, pageAccessToken, sendMessage);
   }
 }
 
-// Fonction pour charger et exécuter des commandes
+// Gestion des images avec interaction
+async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
+  try {
+    // Envoyer un message pour informer que l'image est en cours d'analyse
+    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image... Veuillez patienter ⏳' }, pageAccessToken);
+
+    // Analyser l'image avec OCR.space
+    const extractedText = await analyzeImageWithOCRSpace(imageUrl);
+
+    if (!extractedText) {
+      await sendMessage(senderId, { text: "Je n'ai pas pu extraire de texte de cette image." }, pageAccessToken);
+      return;
+    }
+
+    // Sauvegarder le texte extrait dans l'état de l'utilisateur
+    userStates.set(senderId, { extractedText });
+
+    // Envoyer le texte extrait directement à GPT-4o
+    const gpt4oCommand = commands.get('gpt4o');
+    if (gpt4oCommand) {
+      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage); // GPT-4o traite le texte extrait
+    }
+
+  } catch (error) {
+    console.error('Erreur lors de l\'analyse de l\'image avec OCR.space :', error);
+    await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
+  }
+}
+
+// Gestion des textes envoyés
 async function handleText(senderId, text, pageAccessToken, sendMessage) {
   const args = text.split(' '); // Diviser le texte en arguments
   const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
@@ -67,6 +90,35 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
     } else {
       await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
     }
+  }
+}
+
+async function analyzeImageWithOCRSpace(imageUrl) {
+  const apiKey = 'K87729656488957'; // Remplacez par votre clé d'API OCR.space
+  const ocrApiEndpoint = 'https://api.ocr.space/parse/image';
+
+  try {
+    const formData = new URLSearchParams();
+    formData.append('apikey', apiKey);
+    formData.append('url', imageUrl);
+    formData.append('language', 'eng'); // ou 'fre' pour le français
+
+    const response = await axios.post(ocrApiEndpoint, formData);
+
+    if (response.data.IsErroredOnProcessing) {
+      throw new Error(response.data.ErrorMessage[0]);
+    }
+
+    // Extraire le texte détecté
+    const parsedResults = response.data.ParsedResults;
+    if (parsedResults && parsedResults.length > 0) {
+      return parsedResults[0].ParsedText.trim();
+    }
+
+    return '';
+  } catch (error) {
+    console.error('Erreur lors de l\'analyse OCR avec OCR.space :', error);
+    throw new Error('Erreur lors de l\'analyse avec OCR.space');
   }
 }
 
