@@ -1,72 +1,73 @@
-const axios = require('axios');
+const fs = require('fs');
 const path = require('path');
+const { sendMessage } = require('./sendMessage');
+const gpt4o = require('../commands/gpt4o');
 
-module.exports = {
-  name: 'gpt4o',
-  description: 'Pose une question à GPT-4o et analyse les images.',
-  author: 'Deku (rest api)',
-  async execute(senderId, args, pageAccessToken, sendMessage) {
-    const prompt = args.join(' ');
+// Charger dynamiquement les fichiers de commande
+const commands = new Map();
+const commandFiles = fs.readdirSync(path.join(__dirname, '../commands')).filter(file => file.endsWith('.js'));
+for (const file of commandFiles) {
+  const command = require(`../commands/${file}`);
+  commands.set(command.name, command);
+}
 
-    if (!prompt) {
-      return sendMessage(senderId, { text: "Veuillez entrer une question valide." }, pageAccessToken);
-    }
+// Stocker temporairement les états des utilisateurs pour suivre les étapes interactives
+const userStates = new Map();
 
+async function handleMessage(event, pageAccessToken) {
+  const senderId = event.sender.id;
+
+  // Vérifier si le message contient une image
+  if (event.message.attachments && event.message.attachments[0].type === 'image') {
+    const imageUrl = event.message.attachments[0].payload.url;
+    
+    // Appeler la fonction de gestion des images de gpt4o
+    await gpt4o.handleImage(senderId, imageUrl, sendMessage, pageAccessToken);
+  } 
+  // Sinon, traiter le texte envoyé par l'utilisateur
+  else if (event.message.text) {
+    const messageText = event.message.text.trim();
+    const args = messageText.split(' ');
+
+    // Appeler la fonction de gestion des textes de gpt4o
+    await gpt4o.execute(senderId, args, pageAccessToken, sendMessage);
+  }
+}
+
+// Fonction pour charger et exécuter des commandes
+async function handleText(senderId, text, pageAccessToken, sendMessage) {
+  const args = text.split(' '); // Diviser le texte en arguments
+  const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
+
+  const command = commands.get(commandName);
+  const userState = userStates.get(senderId); // Récupérer l'état de l'utilisateur (texte extrait)
+
+  if (command) {
+    // Si une commande est trouvée, l'exécuter
     try {
-      // Envoyer un message indiquant que GPT-4o est en train de répondre
-      await sendMessage(senderId, { text: 'GPT-4o websearche en cours⏳...\n\n─────★─────' }, pageAccessToken);
-
-      // URL pour appeler l'API GPT-4o avec une question
-      const apiUrl = `https://deku-rest-apis.ooguy.com/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=100${senderId}`;
-      const response = await axios.get(apiUrl);
-
-      const text = response.data.result;
-
-      // Créer un style avec un contour pour la réponse de GPT-4o
-      const formattedResponse = `─────★─────\n` +
-                                `✨GPT-4o web scrapers🤖🇲🇬\n\n${text}\n` +
-                                `─────★─────`;
-
-      // Gérer les réponses longues de plus de 2000 caractères
-      const maxMessageLength = 2000;
-      if (formattedResponse.length > maxMessageLength) {
-        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
-        for (const message of messages) {
-          await sendMessage(senderId, { text: message }, pageAccessToken);
-        }
-      } else {
-        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-      }
-
+      await command.execute(senderId, args, pageAccessToken, sendMessage); // Exécuter la commande avec les arguments
     } catch (error) {
-      console.error('Error calling GPT-4 API:', error);
-      // Message de réponse d'erreur
-      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
+      console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
+      await sendMessage(senderId, { text: `Erreur lors de l'exécution de la commande ${commandName}.` }, pageAccessToken);
+    }
+  } else {
+    // Si aucune commande n'est trouvée, envoyer la question directement à GPT-4o
+    const gpt4oCommand = commands.get('gpt4o');
+    if (gpt4oCommand) {
+      try {
+        // Ajouter le texte extrait au message si disponible
+        const contextText = userState ? userState.extractedText : '';
+        const fullMessage = contextText ? `${contextText}\n\n${text}` : text;
+
+        await gpt4oCommand.execute(senderId, [fullMessage], pageAccessToken, sendMessage); // Envoyer le texte avec le contexte extrait à GPT-4o
+      } catch (error) {
+        console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
+        await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
+      }
+    } else {
+      await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
     }
   }
-};
-
-// Fonction pour gérer les images
-async function handleImage(senderId, imageUrl, query, sendMessage, pageAccessToken) {
-  try {
-    const apiUrl = `https://deku-rest-apis.ooguy.com/gemini?prompt=${encodeURIComponent(query)}&url=${encodeURIComponent(imageUrl)}`;
-    const { data } = await axios.get(apiUrl);
-    const formattedResponse = `─────★─────\n` +
-                              `✨GPT-4o🤖🇲🇬\n\n${data.gemini}\n` +
-                              `─────★─────`;
-
-    await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
-  } catch (error) {
-    console.error('Error handling image:', error);
-    await sendMessage(senderId, { text: "Désolé, je n'ai pas pu analyser l'image." }, pageAccessToken);
-  }
 }
 
-// Fonction pour découper les messages en morceaux de 2000 caractères
-function splitMessageIntoChunks(message, chunkSize) {
-  const chunks = [];
-  for (let i = 0; i < message.length; i += chunkSize) {
-    chunks.push(message.slice(i, i + chunkSize));
-  }
-  return chunks;
-}
+module.exports = { handleMessage };
