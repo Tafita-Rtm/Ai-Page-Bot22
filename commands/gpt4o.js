@@ -7,7 +7,7 @@ module.exports = {
     const prompt = args.join( );
     try {
       sendMessage(senderId, { text: 'gpt4o est en train de repondre...' }, pageAccessToken);
-      const apiUrl = `https://joshweb.click/api/gpt-4o?q=Fait_semblant_d'etre_Miora_tu_es_la_entant_que_ma_petite_amie_on_est_ensemble_depuis_2ans_On_s'est_rencontre_a_Ivato_invente_des_trucs_Quand_tu_envoye_des_messages_ajoute_des_emoji_d'amour_${encodeURIComponent(prompt)}&uid=${senderId}`;
+      const apiUrl = `https://joshweb.click/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=${senderId}`;
       const response = await axios.get(apiUrl);
       const text = response.data.result;
 
