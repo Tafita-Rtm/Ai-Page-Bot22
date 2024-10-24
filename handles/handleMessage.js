@@ -28,32 +28,44 @@ async function handleMessage(event, pageAccessToken) {
   }
 }
 
-// Gestion des images avec interaction
+// Gestion des images avec interaction via Gemini
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
     // Envoyer un message pour informer que l'image est en cours d'analyse
-    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image... Veuillez patienter ⏳' }, pageAccessToken);
+    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image avec Gemini... Veuillez patienter ⏳' }, pageAccessToken);
 
-    // Analyser l'image avec OCR.space
-    const extractedText = await analyzeImageWithOCRSpace(imageUrl);
+    // Analyser l'image avec Gemini (remplacez l'URL de l'API par l'API de Gemini)
+    const description = await analyzeImageWithGemini(imageUrl);
 
-    if (!extractedText) {
-      await sendMessage(senderId, { text: "Je n'ai pas pu extraire de texte de cette image." }, pageAccessToken);
+    if (!description) {
+      await sendMessage(senderId, { text: "Je n'ai pas pu analyser cette image." }, pageAccessToken);
       return;
     }
 
-    // Sauvegarder le texte extrait dans l'état de l'utilisateur
-    userStates.set(senderId, { extractedText });
-
-    // Envoyer le texte extrait directement à GPT-4o
-    const gpt4oCommand = commands.get('gpt4o');
-    if (gpt4oCommand) {
-      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage); // GPT-4o traite le texte extrait
-    }
+    // Envoyer la description générée par Gemini
+    await sendMessage(senderId, { text: `Description de l'image :\n${description}` }, pageAccessToken);
 
   } catch (error) {
-    console.error('Erreur lors de l\'analyse de l\'image avec OCR.space :', error);
+    console.error('Erreur lors de l\'analyse de l\'image avec Gemini :', error);
     await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
+  }
+}
+
+// Fonction pour analyser une image avec Gemini
+async function analyzeImageWithGemini(imageUrl) {
+  const geminiApiEndpoint = 'https://sandipbaruwal.onrender.com/gemini2'; // L'URL de l'API Gemini
+
+  try {
+    const response = await axios.get(`${geminiApiEndpoint}?url=${encodeURIComponent(imageUrl)}`);
+    
+    if (response.data && response.data.answer) {
+      return response.data.answer;
+    }
+
+    return '';
+  } catch (error) {
+    console.error('Erreur lors de l\'analyse de l\'image avec Gemini :', error);
+    throw new Error('Erreur lors de l\'analyse avec Gemini');
   }
 }
 
@@ -90,35 +102,6 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
     } else {
       await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
     }
-  }
-}
-
-async function analyzeImageWithOCRSpace(imageUrl) {
-  const apiKey = 'K87729656488957'; // Remplacez par votre clé d'API OCR.space
-  const ocrApiEndpoint = 'https://api.ocr.space/parse/image';
-
-  try {
-    const formData = new URLSearchParams();
-    formData.append('apikey', apiKey);
-    formData.append('url', imageUrl);
-    formData.append('language', 'eng'); // ou 'fre' pour le français
-
-    const response = await axios.post(ocrApiEndpoint, formData);
-
-    if (response.data.IsErroredOnProcessing) {
-      throw new Error(response.data.ErrorMessage[0]);
-    }
-
-    // Extraire le texte détecté
-    const parsedResults = response.data.ParsedResults;
-    if (parsedResults && parsedResults.length > 0) {
-      return parsedResults[0].ParsedText.trim();
-    }
-
-    return '';
-  } catch (error) {
-    console.error('Erreur lors de l\'analyse OCR avec OCR.space :', error);
-    throw new Error('Erreur lors de l\'analyse avec OCR.space');
   }
 }
 
