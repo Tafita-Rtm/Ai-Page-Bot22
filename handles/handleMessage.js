@@ -30,7 +30,7 @@ async function handleMessage(event, pageAccessToken) {
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
     await sendMessage(senderId, { text: '🖼️ Vous avez envoyé une image ! Que voulez-vous que je fasse avec ? (analyse, détection, etc.)' }, pageAccessToken);
-    userStates.set(senderId, { mode: 'image_discussion', imageUrl });
+    userStates.set(senderId, { mode: 'image_discussion', imageUrl }); // Activer le mode d'analyse d'image
   } catch (error) {
     console.error('Erreur lors de la gestion de l\'image :', error);
     await sendMessage(senderId, { text: '😔 Erreur lors de la gestion de l\'image.' }, pageAccessToken);
