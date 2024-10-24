@@ -32,7 +32,7 @@ async function handleMessage(event, pageAccessToken) {
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
     // Envoyer un message pour informer que l'image est en cours d'analyse
-    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image avec Gemini... Veuillez patienter ⏳' }, pageAccessToken);
+    await sendMessage(senderId, { text: '🖼️ analyse d\'image ... Veuillez patienter ⏳' }, pageAccessToken);
 
     // Analyser l'image avec Gemini (remplacez l'URL de l'API par l'API de Gemini)
     const description = await analyzeImageWithGemini(imageUrl);
