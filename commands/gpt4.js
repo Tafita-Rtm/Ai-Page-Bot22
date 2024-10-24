@@ -1,97 +1,49 @@
-const axios = require('axios');
+const { callGeminiAPI } = require('../utils/callGeminiAPI');
 
 module.exports = {
-  name: 'spotify',
-  description: 'Play a song from Spotify',
+  name: 'ai',
+  description: '📩 Utiliser le comande G pour utiliser Gemini',
+  author: 'ChatGPT',
   async execute(senderId, args, pageAccessToken, sendMessage) {
-    const header = "🎶 Spotify Music Player\n───────────────";
-    const footer = "───────────────";
-
-    // Fonction pour extraire le titre de la chanson et l'artiste
-    const { songTitle, artist } = getSongTitleAndArtist(args);
-
-    if (!songTitle) {
-      return sendMessage(senderId, { text: `${header}\nPlease provide a song title to play.\n${footer}` }, pageAccessToken);
-    }
+    const prompt = args.join(' ');
 
     try {
-      // Envoyer un message indiquant que la chanson est en cours de recherche
-      await sendMessage(senderId, { text: `🔍 *Searching for "${songTitle}" by ${artist || "unknown artist"}...* ⏳` }, pageAccessToken);
+      // Message pour indiquer que Gemini est en train de répondre
+      const waitingMessage = {
+        text: '💬 multyAi est en train de te répondre⏳...\n\n─────★─────'
+      };
+      await sendMessage(senderId, waitingMessage, pageAccessToken);
 
-      // Services pour récupérer les URLs de la chanson
-      const services = [
-        { url: 'https://spotify-play-iota.vercel.app/spotify', params: { query: songTitle } },
-        { url: 'http://zcdsphapilist.replit.app/spotify', params: { q: songTitle } },
-        { url: 'https://openapi-idk8.onrender.com/search-song', params: { song: songTitle } },
-        { url: 'https://markdevs-last-api.onrender.com/search/spotify', params: { q: songTitle } }
-      ];
+      // Appel à l'API Gemini
+      const response = await callGeminiAPI(prompt);
 
-      // Récupérer les URLs de la chanson
-      const trackURLs = await fetchTrackURLs(services);
-      const trackID = trackURLs[0];
+      // Créer un style avec un contour pour la réponse de Gemini
+      const formattedResponse = `─────★─────\n` +
+                                `✨ multy Ai 🤖🇲🇬\n\n${response}\n` +
+                                `─────★─────`;
 
-      // Récupérer le lien de téléchargement pour le track ID sélectionné
-      const downloadResponse = await axios.get(`https://sp-dl-bice.vercel.app/spotify?id=${encodeURIComponent(trackID)}`);
-      const downloadLink = downloadResponse.data.download_link;
-
-      // Télécharger et envoyer la chanson en flux
-      await sendTrackAsStream(downloadLink, senderId, songTitle, artist, sendMessage, pageAccessToken);
-
+      // Gérer les réponses de plus de 2000 caractères
+      const maxMessageLength = 2000;
+      if (formattedResponse.length > maxMessageLength) {
+        const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+        for (const message of messages) {
+          await sendMessage(senderId, { text: message }, pageAccessToken);
+        }
+      } else {
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+      }
     } catch (error) {
-      console.error("Error occurred:", error);
-      await sendMessage(senderId, { text: `${header}\nAn error occurred: ${error.message}\n${footer}` }, pageAccessToken);
+      console.error('Error calling Gemini API:', error);
+      await sendMessage(senderId, { text: 'Une erreur est survenue.' }, pageAccessToken);
     }
   }
 };
 
-// Fonction pour extraire le titre de la chanson et l'artiste
-function getSongTitleAndArtist(args) {
-  let songTitle, artist;
-
-  const byIndex = args.indexOf("by");
-  if (byIndex !== -1 && byIndex > 0 && byIndex < args.length - 1) {
-    songTitle = args.slice(0, byIndex).join(" ");
-    artist = args.slice(byIndex + 1).join(" ");
-  } else {
-    songTitle = args.join(" ");
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
   }
-
-  return { songTitle, artist };
-}
-
-// Fonction pour récupérer les URLs de la chanson
-async function fetchTrackURLs(services) {
-  for (const service of services) {
-    try {
-      const response = await axios.get(service.url, { params: service.params });
-
-      if (response.data.trackURLs && response.data.trackURLs.length > 0) {
-        return response.data.trackURLs;
-      }
-    } catch (error) {
-      console.error(`Error with ${service.url} API:`, error.message);
-    }
-  }
-  throw new Error("No track URLs found from any API.");
-}
-
-// Fonction pour télécharger et envoyer le fichier audio en flux
-async function sendTrackAsStream(downloadLink, senderId, songTitle, artist, sendMessage, pageAccessToken) {
-  try {
-    const response = await axios({
-      url: downloadLink,
-      method: 'GET',
-      responseType: 'arraybuffer'  // Téléchargement du fichier sous forme de données binaires
-    });
-
-    // Envoyer le fichier en flux directement
-    await sendMessage(senderId, {
-      text: `🎧 Now playing: ${songTitle}${artist ? ` by ${artist}` : ''}`,
-      attachment: Buffer.from(response.data, 'binary') // Convertir les données en buffer
-    }, pageAccessToken);
-
-  } catch (error) {
-    console.error("Error downloading or sending the track:", error.message);
-    throw new Error("Error downloading or sending the track.");
-  }
+  return chunks;
 }
