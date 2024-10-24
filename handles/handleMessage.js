@@ -21,95 +21,31 @@ async function handleMessage(event, pageAccessToken) {
   // Vérifier si le message contient une image
   if (event.message.attachments && event.message.attachments[0].type === 'image') {
     const imageUrl = event.message.attachments[0].payload.url;
-    await askImagePurpose(senderId, imageUrl, pageAccessToken, sendMessage);
+    await handleImage(senderId, imageUrl, pageAccessToken, sendMessage);
   } else if (event.message.text) {
     const messageText = event.message.text.trim();
     await handleText(senderId, messageText, pageAccessToken, sendMessage);
   }
 }
 
-// Poser des questions sur l'utilisation de l'image
-async function askImagePurpose(senderId, imageUrl, pageAccessToken, sendMessage) {
+// Gestion des images avec interaction personnalisée
+async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
-    // Envoyer un message pour demander ce que l'utilisateur souhaite faire avec l'image
-    await sendMessage(senderId, { text: 'Que souhaitez-vous faire avec cette image ?\n1. Analyser l\'image\n2. Répondre à une question\n3. Discuter à propos de l\'image' }, pageAccessToken);
+    // Stocker l'URL de l'image et demander à l'utilisateur ce qu'il veut faire
+    userStates.set(senderId, { imageUrl, mode: 'awaiting_action' });
 
-    // Stocker l'état de l'utilisateur pour attendre sa réponse
-    userStates.set(senderId, { step: 'await_image_action', imageUrl });
+    await sendMessage(senderId, {
+      text: 'Vous avez envoyé une image. Que voulez-vous que je fasse avec cette image ?',
+    }, pageAccessToken);
   } catch (error) {
-    console.error('Erreur lors de la demande d\'action pour l\'image :', error);
-    await sendMessage(senderId, { text: 'Erreur lors de la gestion de votre demande.' }, pageAccessToken);
-  }
-}
-
-// Gestion des réponses en fonction de l'étape
-async function handleText(senderId, text, pageAccessToken, sendMessage) {
-  const userState = userStates.get(senderId);
-
-  if (userState && userState.step === 'await_image_action') {
-    await handleImageAction(senderId, text, userState.imageUrl, pageAccessToken, sendMessage);
-  } else {
-    // Si l'utilisateur ne se trouve pas dans une étape spécifique, envoyer la question à GPT-4o
-    const gpt4oCommand = commands.get('gpt4o');
-    if (gpt4oCommand) {
-      try {
-        await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage);
-      } catch (error) {
-        console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
-        await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
-      }
-    } else {
-      await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
-    }
-  }
-}
-
-// Gestion de l'action choisie par l'utilisateur pour l'image
-async function handleImageAction(senderId, action, imageUrl, pageAccessToken, sendMessage) {
-  try {
-    switch (action) {
-      case '1': // Analyser l'image
-        await analyzeImage(senderId, imageUrl, pageAccessToken, sendMessage);
-        break;
-      case '2': // Répondre à une question sur l'image
-        await sendMessage(senderId, { text: 'Quelle question avez-vous à propos de cette image ?' }, pageAccessToken);
-        userStates.set(senderId, { step: 'await_image_question', imageUrl });
-        break;
-      case '3': // Discuter à propos de l'image
-        await sendMessage(senderId, { text: 'D\'accord, nous pouvons discuter de cette image. Que voulez-vous savoir ou dire à son propos ?' }, pageAccessToken);
-        userStates.set(senderId, { step: 'await_image_discussion', imageUrl });
-        break;
-      default:
-        await sendMessage(senderId, { text: 'Option non valide. Veuillez choisir 1, 2 ou 3.' }, pageAccessToken);
-    }
-  } catch (error) {
-    console.error('Erreur lors de la gestion de l\'action pour l\'image :', error);
-    await sendMessage(senderId, { text: 'Erreur lors de la gestion de votre demande.' }, pageAccessToken);
-  }
-}
-
-// Fonction pour analyser une image
-async function analyzeImage(senderId, imageUrl, pageAccessToken, sendMessage) {
-  try {
-    await sendMessage(senderId, { text: '🖼️ analyse d\'image ... Veuillez patienter ⏳' }, pageAccessToken);
-
-    // Appeler l'API de Gemini pour l'analyse (remplacez l'URL par l'API réelle)
-    const description = await analyzeImageWithGemini(imageUrl);
-
-    if (description) {
-      await sendMessage(senderId, { text: `Description de l'image :\n${description}` }, pageAccessToken);
-    } else {
-      await sendMessage(senderId, { text: "Je n'ai pas pu analyser cette image." }, pageAccessToken);
-    }
-  } catch (error) {
-    console.error('Erreur lors de l\'analyse de l\'image avec Gemini :', error);
-    await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
+    console.error('Erreur lors de la gestion de l\'image :', error);
+    await sendMessage(senderId, { text: 'Erreur lors de la gestion de l\'image.' }, pageAccessToken);
   }
 }
 
 // Fonction pour analyser une image avec Gemini
 async function analyzeImageWithGemini(imageUrl) {
-  const geminiApiEndpoint = 'https://sandipbaruwal.onrender.com/gemini2'; // Remplacer par votre API
+  const geminiApiEndpoint = 'https://sandipbaruwal.onrender.com/gemini2'; // L'URL de l'API Gemini
 
   try {
     const response = await axios.get(`${geminiApiEndpoint}?url=${encodeURIComponent(imageUrl)}`);
@@ -122,6 +58,58 @@ async function analyzeImageWithGemini(imageUrl) {
   } catch (error) {
     console.error('Erreur lors de l\'analyse de l\'image avec Gemini :', error);
     throw new Error('Erreur lors de l\'analyse avec Gemini');
+  }
+}
+
+// Gestion des textes envoyés
+async function handleText(senderId, text, pageAccessToken, sendMessage) {
+  const userState = userStates.get(senderId);
+
+  if (userState && userState.mode === 'awaiting_action') {
+    // Gestion des actions demandées par l'utilisateur concernant l'image
+    if (text.toLowerCase() === 'analyser') {
+      await sendMessage(senderId, { text: '🖼️ analyse de l\'image en cours... Veuillez patienter ⏳' }, pageAccessToken);
+
+      try {
+        const description = await analyzeImageWithGemini(userState.imageUrl);
+        await sendMessage(senderId, { text: `Description de l'image :\n${description}` }, pageAccessToken);
+      } catch (error) {
+        await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
+      }
+    } else if (text.toLowerCase() === 'stop') {
+      userStates.delete(senderId); // Fin de la discussion liée à l'image
+      await sendMessage(senderId, { text: 'Analyse de l\'image terminée. Vous pouvez continuer la discussion.' }, pageAccessToken);
+    } else {
+      await sendMessage(senderId, { text: 'Je n\'ai pas compris. Voulez-vous analyser l\'image ou dire "stop" pour arrêter ?' }, pageAccessToken);
+    }
+  } else {
+    // Si aucune action n'est attendue, traiter le texte normalement avec GPT-4o
+    const args = text.split(' '); // Diviser le texte en arguments
+    const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
+
+    const command = commands.get(commandName);
+    if (command) {
+      // Si une commande est trouvée, l'exécuter
+      try {
+        await command.execute(senderId, args, pageAccessToken, sendMessage); // Exécuter la commande avec les arguments
+      } catch (error) {
+        console.error(`Erreur lors de l'exécution de la commande ${commandName}:`, error);
+        await sendMessage(senderId, { text: `Erreur lors de l'exécution de la commande ${commandName}.` }, pageAccessToken);
+      }
+    } else {
+      // Si aucune commande n'est trouvée, envoyer la question directement à GPT-4o
+      const gpt4oCommand = commands.get('gpt4o');
+      if (gpt4oCommand) {
+        try {
+          await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage); // Envoyer le texte à GPT-4o
+        } catch (error) {
+          console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
+          await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
+        }
+      } else {
+        await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
+      }
+    }
   }
 }
 
