@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { sendMessage } = require('./sendMessage');
-const FormData = require('form-data');
 
 const commands = new Map();
 
@@ -29,67 +28,32 @@ async function handleMessage(event, pageAccessToken) {
   }
 }
 
-// Gestion des images avec GPT-4o
+// Gestion des images avec interaction
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
-    // Envoyer un message pour informer que l'image est en cours d'analyse par GPT-4o
-    await sendMessage(senderId, { text: '🖼️ Envoi de l\'image à GPT-4o pour analyse... Veuillez patienter ⏳' }, pageAccessToken);
+    // Envoyer un message pour informer que l'image est en cours d'analyse
+    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image avec GPT-4o... Veuillez patienter ⏳' }, pageAccessToken);
 
-    // Télécharger l'image depuis l'URL fournie par l'utilisateur
-    const imagePath = await downloadImage(imageUrl);
+    // Analyser l'image avec GPT-4o
+    const extractedText = await analyzeImageWithGpt4o(imageUrl);
 
-    // Envoyer l'image téléchargée directement à GPT-4o
-    const gpt4oResponse = await sendImageToGpt4o(imagePath);
+    if (!extractedText) {
+      await sendMessage(senderId, { text: "Je n'ai pas pu extraire d'information de cette image." }, pageAccessToken);
+      return;
+    }
 
-    // Envoyer la réponse de GPT-4o à l'utilisateur
-    await sendMessage(senderId, { text: `🤖 Réponse de GPT-4o :\n\n${gpt4oResponse}` }, pageAccessToken);
+    // Sauvegarder le texte extrait dans l'état de l'utilisateur
+    userStates.set(senderId, { extractedText });
 
-    // Supprimer le fichier image local après analyse
-    fs.unlinkSync(imagePath);
-
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi de l\'image à GPT-4o :', error);
-    await sendMessage(senderId, { text: 'Erreur lors de l\'envoi de l\'image à GPT-4o.' }, pageAccessToken);
-  }
-}
-
-// Fonction pour télécharger l'image localement
-async function downloadImage(imageUrl) {
-  const imagePath = path.join(__dirname, 'temp_image.jpg'); // Chemin temporaire pour stocker l'image
-  const writer = fs.createWriteStream(imagePath);
-
-  const response = await axios({
-    url: imageUrl,
-    method: 'GET',
-    responseType: 'stream'
-  });
-
-  response.data.pipe(writer);
-
-  return new Promise((resolve, reject) => {
-    writer.on('finish', () => resolve(imagePath));
-    writer.on('error', reject);
-  });
-}
-
-// Fonction pour envoyer l'image à GPT-4o
-async function sendImageToGpt4o(imagePath) {
-  const form = new FormData();
-  form.append('file', fs.createReadStream(imagePath)); // Attacher l'image téléchargée au formulaire
-
-  try {
-    const response = await axios.post('https://free-ai-models.vercel.app/v1/chat/completions', form, {
-      headers: {
-        ...form.getHeaders(),
-      }
-    });
-
-    // Retourner la réponse générée par GPT-4o
-    return response.data.response;
+    // Envoyer le texte extrait directement à GPT-4o
+    const gpt4oCommand = commands.get('gpt4o');
+    if (gpt4oCommand) {
+      await gpt4oCommand.execute(senderId, [extractedText], pageAccessToken, sendMessage); // GPT-4o traite le texte extrait
+    }
 
   } catch (error) {
-    console.error('Erreur lors de l\'envoi de l\'image à GPT-4o :', error);
-    throw new Error('Erreur lors de l\'analyse de l\'image avec GPT-4o.');
+    console.error('Erreur lors de l\'analyse de l\'image avec GPT-4o :', error);
+    await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
   }
 }
 
@@ -99,6 +63,7 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
   const commandName = args.shift().toLowerCase(); // Récupérer le premier mot comme commande
 
   const command = commands.get(commandName);
+  const userState = userStates.get(senderId); // Récupérer l'état de l'utilisateur (texte extrait)
 
   if (command) {
     // Si une commande est trouvée, l'exécuter
@@ -113,7 +78,11 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
     const gpt4oCommand = commands.get('gpt4o');
     if (gpt4oCommand) {
       try {
-        await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage); // Envoyer le texte à GPT-4o
+        // Ajouter le texte extrait au message si disponible
+        const contextText = userState ? userState.extractedText : '';
+        const fullMessage = contextText ? `${contextText}\n\n${text}` : text;
+
+        await gpt4oCommand.execute(senderId, [fullMessage], pageAccessToken, sendMessage); // Envoyer le texte avec le contexte extrait à GPT-4o
       } catch (error) {
         console.error('Erreur lors de l\'utilisation de GPT-4o:', error);
         await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de GPT-4o.' }, pageAccessToken);
@@ -122,6 +91,44 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
       await sendMessage(senderId, { text: "Impossible de trouver le service GPT-4o." }, pageAccessToken);
     }
   }
+}
+
+// Remplacement de la fonction d'analyse par GPT-4o
+async function analyzeImageWithGpt4o(imageUrl) {
+  try {
+    // Télécharger l'image depuis l'URL fournie par l'utilisateur
+    const imageBuffer = await downloadImage(imageUrl);
+
+    // Envoyer l'image directement à GPT-4o pour analyse
+    const formData = new FormData();
+    formData.append('file', imageBuffer, {
+      filename: 'image.jpg',
+      contentType: 'image/jpeg',
+    });
+
+    const response = await axios.post('https://votre-api-gpt4o-endpoint/analyze-image', formData, {
+      headers: {
+        ...formData.getHeaders(),
+      },
+    });
+
+    // Retourner le texte extrait de l'image par GPT-4o
+    return response.data.extractedText; // Adaptez selon le format de réponse
+
+  } catch (error) {
+    console.error('Erreur lors de l\'analyse de l\'image avec GPT-4o :', error);
+    throw new Error('Erreur lors de l\'analyse avec GPT-4o.');
+  }
+}
+
+// Fonction pour télécharger l'image
+async function downloadImage(imageUrl) {
+  const response = await axios({
+    url: imageUrl,
+    method: 'GET',
+    responseType: 'arraybuffer',
+  });
+  return Buffer.from(response.data, 'binary');
 }
 
 module.exports = { handleMessage };
