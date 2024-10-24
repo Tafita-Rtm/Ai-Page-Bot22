@@ -32,13 +32,13 @@ async function handleMessage(event, pageAccessToken) {
 async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
   try {
     // Envoyer un message pour informer que l'image est en cours d'analyse
-    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image avec GPT-4o... Veuillez patienter ⏳' }, pageAccessToken);
+    await sendMessage(senderId, { text: '🖼️ J\'analyse l\'image... Veuillez patienter ⏳' }, pageAccessToken);
 
-    // Analyser l'image avec GPT-4o
-    const extractedText = await analyzeImageWithGpt4o(imageUrl);
+    // Analyser l'image avec OCR.space
+    const extractedText = await analyzeImageWithOCRSpace(imageUrl);
 
     if (!extractedText) {
-      await sendMessage(senderId, { text: "Je n'ai pas pu extraire d'information de cette image." }, pageAccessToken);
+      await sendMessage(senderId, { text: "Je n'ai pas pu extraire de texte de cette image." }, pageAccessToken);
       return;
     }
 
@@ -52,7 +52,7 @@ async function handleImage(senderId, imageUrl, pageAccessToken, sendMessage) {
     }
 
   } catch (error) {
-    console.error('Erreur lors de l\'analyse de l\'image avec GPT-4o :', error);
+    console.error('Erreur lors de l\'analyse de l\'image avec OCR.space :', error);
     await sendMessage(senderId, { text: 'Erreur lors de l\'analyse de l\'image.' }, pageAccessToken);
   }
 }
@@ -93,42 +93,33 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
   }
 }
 
-// Remplacement de la fonction d'analyse par GPT-4o
-async function analyzeImageWithGpt4o(imageUrl) {
+async function analyzeImageWithOCRSpace(imageUrl) {
+  const apiKey = 'K87729656488957'; // Remplacez par votre clé d'API OCR.space
+  const ocrApiEndpoint = 'https://api.ocr.space/parse/image';
+
   try {
-    // Télécharger l'image depuis l'URL fournie par l'utilisateur
-    const imageBuffer = await downloadImage(imageUrl);
+    const formData = new URLSearchParams();
+    formData.append('apikey', apiKey);
+    formData.append('url', imageUrl);
+    formData.append('language', 'eng'); // ou 'fre' pour le français
 
-    // Envoyer l'image directement à GPT-4o pour analyse
-    const formData = new FormData();
-    formData.append('file', imageBuffer, {
-      filename: 'image.jpg',
-      contentType: 'image/jpeg',
-    });
+    const response = await axios.post(ocrApiEndpoint, formData);
 
-    const response = await axios.post('https://votre-api-gpt4o-endpoint/analyze-image', formData, {
-      headers: {
-        ...formData.getHeaders(),
-      },
-    });
+    if (response.data.IsErroredOnProcessing) {
+      throw new Error(response.data.ErrorMessage[0]);
+    }
 
-    // Retourner le texte extrait de l'image par GPT-4o
-    return response.data.extractedText; // Adaptez selon le format de réponse
+    // Extraire le texte détecté
+    const parsedResults = response.data.ParsedResults;
+    if (parsedResults && parsedResults.length > 0) {
+      return parsedResults[0].ParsedText.trim();
+    }
 
+    return '';
   } catch (error) {
-    console.error('Erreur lors de l\'analyse de l\'image avec GPT-4o :', error);
-    throw new Error('Erreur lors de l\'analyse avec GPT-4o.');
+    console.error('Erreur lors de l\'analyse OCR avec OCR.space :', error);
+    throw new Error('Erreur lors de l\'analyse avec OCR.space');
   }
-}
-
-// Fonction pour télécharger l'image
-async function downloadImage(imageUrl) {
-  const response = await axios({
-    url: imageUrl,
-    method: 'GET',
-    responseType: 'arraybuffer',
-  });
-  return Buffer.from(response.data, 'binary');
 }
 
 module.exports = { handleMessage };
