@@ -1,8 +1,8 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'GPT4o',
-  description: 'Ask a question to GPT-4',
+  name: 'gpt4o',
+  description: 'Ask a question to GPT-4o',
   author: 'Deku (rest api)',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
@@ -12,17 +12,17 @@ module.exports = {
     }
 
     try {
-      // Envoyer un message indiquant que l'IA est en train de répondre avec un cadre personnalisé
-      await sendMessage(senderId, { text: '💬 GPT4o webscrapers🔍 ⏳...\n\n─────★─────' }, pageAccessToken);
+      // Envoyer un message indiquant que GPT-4o est en train de répondre
+      await sendMessage(senderId, { text: '💬 *GPT-4o est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
 
-      // Appel à l'API GPT-4
-      const apiUrl = `https://joshweb.click/api/gpt-4o?q=${encodeURIComponent(prompt)}&uid=${senderId}`;
+      // URL pour appeler l'API GPT-4o
+      const apiUrl = `https://joshweb.click/api/gpt-4o?q=Tu_es_une_intelligence_artificielle_plus_avancee_GPT-4o_capable_de_faire_des_recherches_sur_internet_et_repondre_a_toutes_les_questions_tu_es_capable_de_tout_faire_${encodeURIComponent(prompt)}&uid=${senderId}`;
       const response = await axios.get(apiUrl);
       const text = response.data.result;
 
-      // Créer un style avec un contour pour la réponse de GPT-4
+      // Créer un style avec un contour pour la réponse de GPT-4o
       const formattedResponse = `─────★─────\n` +
-                                `✨ GPT4o web 🇲🇬\n\n${text}\n` +
+                                `✨ GPT-4o 🤖\n\n${text}\n` +
                                 `─────★─────`;
 
       // Gérer les réponses longues de plus de 2000 caractères
@@ -37,7 +37,7 @@ module.exports = {
       }
 
     } catch (error) {
-      console.error('Error calling GPT-4 API:', error);
+      console.error('Error calling GPT-4o API:', error);
       // Message de réponse d'erreur
       await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
