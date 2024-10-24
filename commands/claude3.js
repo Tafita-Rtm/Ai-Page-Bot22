@@ -2,7 +2,7 @@ const axios = require('axios');
 
 module.exports = {
   name: 'gpt4',
-  description: 'Pose une question à plusieurs services AI et obtient la réponse la plus rapide.',
+  description: 'Pose une question à chatgpt4.',
   author: 'ArYAN',
   
   async execute(senderId, args, pageAccessToken, sendMessage) {
