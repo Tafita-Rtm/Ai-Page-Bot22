@@ -2,7 +2,7 @@ const { callGeminiAPI } = require('../utils/callGeminiAPI');
 
 module.exports = {
   name: 'ai',
-  description: '📩 Utiliser le comande G pour utiliser Gemini',
+  description: 'Pose une question à plusieurs services AI et obtient la réponse la plus rapide.',
   author: 'ChatGPT',
   async execute(senderId, args, pageAccessToken, sendMessage) {
     const prompt = args.join(' ');
