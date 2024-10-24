@@ -39,15 +39,18 @@ async function handleText(senderId, text, pageAccessToken, sendMessage) {
   if (userState && userState.mode === 'image_discussion') {
     if (text.toLowerCase() === 'stop') {
       // L'utilisateur veut arrêter la discussion sur l'image
-      userStates.delete(senderId);
-      await sendMessage(senderId, { text: '🚫 Discussion sur l\'image terminée. Je suis prêt pour autre chose !' }, pageAccessToken);
+      userStates.set(senderId, { mode: 'general_discussion' });
+      await sendMessage(senderId, { text: '🚫 Discussion sur l\'image terminée. Vous pouvez maintenant poser d\'autres questions !' }, pageAccessToken);
     } else {
-      // Continuer l'interaction sur l'image
+      // Continuer l'interaction sur l'image via Gemini
       await handleImageDiscussion(senderId, userState.imageUrl, text, pageAccessToken, sendMessage);
     }
+  } else if (userState && userState.mode === 'general_discussion') {
+    // Discussion générale après le mode image (géré par GPT-4o)
+    await handleGeneralDiscussion(senderId, text, pageAccessToken, sendMessage);
   } else {
-    // Si aucune image n'est en cours de discussion, gérer normalement
-    await sendMessage(senderId, { text: "Je ne suis pas sûr de comprendre 🤔. Envoyez-moi une image et je peux l'analyser pour vous !" }, pageAccessToken);
+    // Si aucune discussion spécifique n'est en cours
+    await sendMessage(senderId, { text: "Je ne suis pas sûr de comprendre 🤔. Envoyez-moi une image pour commencer une analyse !" }, pageAccessToken);
   }
 }
 
@@ -90,6 +93,23 @@ async function analyzeImageWithGemini(imageUrl, userQuery) {
   } catch (error) {
     console.error('Erreur lors de l\'analyse de l\'image avec Gemini :', error);
     throw new Error('Erreur lors de l\'analyse avec Gemini');
+  }
+}
+
+// Fonction pour gérer les questions générales via GPT-4o après l'arrêt de la discussion sur l'image
+async function handleGeneralDiscussion(senderId, text, pageAccessToken, sendMessage) {
+  try {
+    // Simuler une commande pour GPT-4o
+    const gpt4oCommand = commands.get('gpt4o');
+
+    if (gpt4oCommand) {
+      await gpt4oCommand.execute(senderId, [text], pageAccessToken, sendMessage);
+    } else {
+      await sendMessage(senderId, { text: "GPT-4o n'est pas disponible actuellement." }, pageAccessToken);
+    }
+  } catch (error) {
+    console.error('Erreur lors de l\'utilisation de GPT-4o :', error);
+    await sendMessage(senderId, { text: '😔 Une erreur est survenue lors de la gestion de votre demande.' }, pageAccessToken);
   }
 }
 
