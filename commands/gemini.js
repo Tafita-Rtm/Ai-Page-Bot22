@@ -1,98 +1,99 @@
 const axios = require('axios');
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
 
+// Fonction pour découper les messages en morceaux de 2000 caractères
+function splitMessageIntoChunks(message, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < message.length; i += chunkSize) {
+    chunks.push(message.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
 module.exports = {
-  name: 'texttospeech',
-  description: 'Convertit un texte en fichier audio et l\'envoie à l\'utilisateur.',
-  
-  async execute(senderId, args, pageAccessToken, sendMessage) {
-    const header = "🔊 Text-to-Speech Service\n───────────────";
-    const footer = "───────────────";
+  name: 'gemini',
+  description: 'Chat avec Gemini ou génère une image',
+  author: 'vex_kshitiz',
 
-    // Extraire le texte à convertir
-    const text = args.join(' ');
+  async execute(senderId, args, pageAccessToken, sendMessage, messageReply = null) {
+    const prompt = args.join(' ').trim();
 
-    if (!text) {
-      return sendMessage(senderId, { text: `${header}\nVeuillez fournir un texte à convertir en voix.\n${footer}` }, pageAccessToken);
+    if (!prompt) {
+      return sendMessage(senderId, { text: "👩‍💻 | 𝙶𝚎𝚖𝚒𝚗𝚒 |\n━━━━━━━━━━━━━━━━\nVeuillez fournir un prompt.\n━━━━━━━━━━━━━━━━" }, pageAccessToken);
     }
 
     try {
-      // Envoyer un message indiquant que la conversion est en cours
-      await sendMessage(senderId, { text: `🎙️ *Conversion du texte en voix...* ⏳` }, pageAccessToken);
+      if (args[0].toLowerCase() === "draw") {
+        // Générer une image
+        await sendMessage(senderId, { text: '💬 *Gemini est en train de générer une image* ⏳...\n\n─────★─────' }, pageAccessToken);
+        
+        const imageUrl = await generateImage(prompt);
+        const imagePath = path.join(__dirname, 'cache', `image_${Date.now()}.png`);
+        const writer = fs.createWriteStream(imagePath);
+        
+        const { data } = await axios({ url: imageUrl, method: 'GET', responseType: 'stream' });
+        data.pipe(writer);
+        
+        await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+        
+        await sendMessage(senderId, {
+          text: '👩‍💻 | 𝙶𝚎𝚖𝚒𝚗𝚒 |\n━━━━━━━━━━━━━━━━\nImage générée :',
+          attachment: fs.createReadStream(imagePath)
+        }, pageAccessToken);
+        
+      } else if (messageReply?.attachments?.length) {
+        // Décrire une image
+        const photoUrl = messageReply.attachments[0].url;
+        const description = await describeImage(prompt, photoUrl);
+        const formattedResponse = `👩‍💻 | 𝙶𝚎𝚖𝚒𝚗𝚒 |\n━━━━━━━━━━━━━━━━\nDescription: ${description}\n━━━━━━━━━━━━━━━━`;
+        await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+        
+      } else {
+        // Obtenir une réponse textuelle
+        await sendMessage(senderId, { text: '💬 *Gemini est en train de te répondre* ⏳...\n\n─────★─────' }, pageAccessToken);
+        const response = await getTextResponse(prompt, senderId);
+        const formattedResponse = `─────★─────\n✨ Gemini 🤖\n\n${response}\n─────★─────`;
 
-      // Utiliser Eleven Labs pour convertir le texte en fichier audio
-      const audioFilePath = await convertTextToSpeechElevenLabs(text);
-
-      // Envoyer le fichier audio en flux à l'utilisateur
-      await sendAudioAsStream(audioFilePath, senderId, sendMessage, pageAccessToken);
+        // Gérer les réponses longues
+        const maxMessageLength = 2000;
+        if (formattedResponse.length > maxMessageLength) {
+          const messages = splitMessageIntoChunks(formattedResponse, maxMessageLength);
+          for (const message of messages) {
+            await sendMessage(senderId, { text: message }, pageAccessToken);
+          }
+        } else {
+          await sendMessage(senderId, { text: formattedResponse }, pageAccessToken);
+        }
+      }
 
     } catch (error) {
-      console.error("Erreur lors de la conversion texte-en-parole:", error.message);
-      await sendMessage(senderId, { text: `${header}\nUne erreur est survenue: ${error.message}\n${footer}` }, pageAccessToken);
+      console.error('Erreur lors de l’appel API Gemini:', error);
+      await sendMessage(senderId, { text: 'Désolé, une erreur est survenue. Veuillez réessayer plus tard.' }, pageAccessToken);
     }
   }
 };
 
-// Fonction pour convertir le texte en voix avec Eleven Labs
-async function convertTextToSpeechElevenLabs(text) {
-  const apiKey = 'sk_04fee5b196ffb08fa8d93e95de08a100b89794bc8efbc807'; // Clé API Eleven Labs
-  const voiceId = '21m00Tcm4TlvDq8ikWAM'; // ID de la voix souhaitée
-
-  try {
-    const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        text: text,
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        },
-      },
-      {
-        headers: {
-          'xi-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        responseType: 'arraybuffer',
-      }
-    );
-
-    // Générer un nom de fichier unique pour l'audio
-    const audioFileName = `output_${Date.now()}.mp3`;
-    const audioFilePath = path.join(__dirname, `../audio/${audioFileName}`);
-
-    // Sauvegarder le fichier audio
-    fs.writeFileSync(audioFilePath, response.data);
-
-    return audioFilePath; // Retourner le chemin du fichier audio
-  } catch (error) {
-    console.error('Erreur lors de la conversion texte-en-parole avec Eleven Labs:', error.message);
-    throw new Error('Erreur avec Eleven Labs TTS.');
-  }
+// Fonction pour obtenir une réponse textuelle
+async function getTextResponse(prompt, senderId) {
+  const apiUrl = `https://gemini-ai-pearl-two.vercel.app/kshitiz?prompt=${encodeURIComponent(prompt)}&uid=${senderId}&apikey=kshitiz`;
+  const response = await axios.get(apiUrl);
+  return response.data.answer;
 }
 
-// Fonction pour envoyer le fichier audio en flux
-async function sendAudioAsStream(audioFilePath, senderId, sendMessage, pageAccessToken) {
-  try {
-    const audioData = fs.readFileSync(audioFilePath); // Lire les données binaires du fichier audio
-
-    // Envoyer le fichier en flux directement
-    await sendMessage(senderId, {
-      attachment: {
-        type: 'audio',
-        payload: {
-          url: audioFilePath, // Utiliser le fichier local ou une URL générée pour envoyer l'audio
-          is_reusable: true
-        }
-      }
-    }, pageAccessToken);
-
-    // Supprimer le fichier audio après l'envoi (optionnel)
-    fs.unlinkSync(audioFilePath);
-  } catch (error) {
-    console.error("Erreur lors de l'envoi du fichier audio:", error.message);
-    throw new Error("Erreur lors de l'envoi du fichier audio.");
-  }
+// Fonction pour générer une image
+async function generateImage(prompt) {
+  const apiUrl = `https://sdxl-kshitiz.onrender.com/gen?prompt=${encodeURIComponent(prompt)}&style=3`;
+  const response = await axios.get(apiUrl);
+  return response.data.url;
 }
 
+// Fonction pour décrire une image
+async function describeImage(prompt, photoUrl) {
+  const apiUrl = `https://sandipbaruwal.onrender.com/gemini2?prompt=${encodeURIComponent(prompt)}&url=${encodeURIComponent(photoUrl)}`;
+  const response = await axios.get(apiUrl);
+  return response.data.answer;
+}
