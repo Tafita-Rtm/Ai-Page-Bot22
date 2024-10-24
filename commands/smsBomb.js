@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 module.exports = {
-  name: 'gpt5',
+  name: 'gpt4',
   description: 'Pose une question à plusieurs services AI et obtient la réponse la plus rapide.',
   author: 'ArYAN',
   
@@ -28,7 +28,7 @@ module.exports = {
 
     } catch (error) {
       console.error('Erreur lors de la requête à l\'IA :', error);
-      await sendMessage(senderId, { text: 'Erreur lors de l\'utilisation de l\'IA.' }, pageAccessToken);
+      await sendMessage(senderId, { text: '' }, pageAccessToken);
     }
   },
 
