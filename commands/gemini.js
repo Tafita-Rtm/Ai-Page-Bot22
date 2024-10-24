@@ -1,5 +1,5 @@
 const axios = require('axios');
-const fs = require('fs-extra');
+const fs = require('fs');
 const path = require('path');
 
 // Fonction pour découper les messages en morceaux de 2000 caractères
